@@ -8,20 +8,50 @@
   const ENTRIES_KEY = 'sb.entries.v1';
   const DRAFT_KEY = 'sb.draft.v1';
   const app = document.getElementById('app');
+  const topbar = document.getElementById('topbar');
+  const tabs = document.getElementById('tabs');
+
+  // ---------- icons (static strings only) ----------
+  const ICON = {
+    idea: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/>',
+    learning: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5V5.5M9 8h7M9 12h5"/>',
+    session: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/>',
+    journal: '<path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5zM9 3v18M12.5 8h4M12.5 12h4"/>',
+    habit: '<path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+    download: '<path d="M12 3v12M7 11l5 5 5-5M5 21h14"/>',
+    upload: '<path d="M12 16V4M7 8l5-5 5 5M5 21h14"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+    share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    phone: '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
+    notebook: '<path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h5M10 12h5"/>',
+    chevron: '<path d="M9 5l7 7-7 7"/>',
+    plus: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'
+  };
+  function svg(name) {
+    const t = document.createElement('template');
+    t.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ''}</svg>`;
+    return t.content.firstChild;
+  }
 
   // ---------- storage ----------
   function load(key, fallback) {
     try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; } catch (e) { return fallback; }
   }
   function save(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { toast('Could not save on this device (storage full or blocked).'); return false; }
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { toast('Could not save on this device (storage is full or blocked).'); return false; }
   }
   const getEntries = () => load(ENTRIES_KEY, []);
   const setEntries = (list) => save(ENTRIES_KEY, list);
   const getDraft = () => load(DRAFT_KEY, null);
-  const setDraft = (d) => (d ? save(DRAFT_KEY, d) : localStorage.removeItem(DRAFT_KEY));
+  const setDraft = (d) => { try { d ? localStorage.setItem(DRAFT_KEY, JSON.stringify(d)) : localStorage.removeItem(DRAFT_KEY); } catch (e) { /* draft is best effort */ } };
 
-  // ---------- small helpers ----------
+  // ---------- helpers ----------
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -31,22 +61,52 @@
       else if (k === 'value') el.value = v;
       else el.setAttribute(k, v === true ? '' : v);
     }
-    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));
+    for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid));
     return el;
   }
   const pad = (n) => String(n).padStart(2, '0');
-  const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = () => dateStr(new Date());
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const slugify = (s) => (s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').slice(0, 5).join('-');
+  const plural = (n, w, pl) => `${n} ${n === 1 ? w : pl || w + 's'}`;
+  const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  function dayLabel(s) {
+    if (s === today()) return 'Today';
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    if (s === dateStr(y)) return 'Yesterday';
+    try { return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(parseDate(s)); } catch (e) { return s; }
+  }
+  const stripOptional = (q) => q.replace(/\s*\(optional\)$/, '');
+  const typeClass = (type) => 't-' + type;
+  const badge = (type) => h('div', { class: `badge ${typeClass(type)}` }, svg(type));
 
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, action) {
     const t = document.getElementById('toast');
-    t.textContent = msg; t.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+    t.replaceChildren(msg);
+    if (action) t.append(h('button', { onclick: () => { t.hidden = true; action.run(); } }, action.label));
+    t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, action ? 7000 : 2600);
   }
 
-  function render(...nodes) { app.replaceChildren(...nodes.filter(Boolean)); window.scrollTo(0, 0); }
+  // ---------- shell ----------
+  function shell({ top, tab, focus }) {
+    topbar.replaceChildren(...[].concat(top).filter(Boolean));
+    tabs.hidden = !!focus;
+    document.body.classList.toggle('focus', !!focus);
+    app.classList.toggle('no-tabs', !!focus);
+    tabs.querySelectorAll('a').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+  }
+  const logo = () => h('span', { class: 'logo' }, h('i', null, svg('notebook')), 'Second Brain');
+  const title = (t) => h('div', { class: 'title' }, t);
+  const backBtn = (href, label) => h('a', { class: 'icon-btn', href, 'aria-label': label || 'Back' }, svg('back'));
+  function view(...nodes) {
+    // fixed bars live outside the animated wrapper, or the animation's transform would trap them
+    const flat = nodes.flat(Infinity).filter(Boolean), bars = flat.filter((n) => n.classList && n.classList.contains('actionbar'));
+    app.replaceChildren(h('div', { class: 'view' }, flat.filter((n) => !bars.includes(n))), ...bars);
+    window.scrollTo(0, 0);
+  }
 
   // ---------- markdown (same format as second-brain/entries) ----------
   const yaml = (s) => (/[:#\[\]{}&*!|>'"%@`]|^\s|\s$/.test(s) ? JSON.stringify(s) : s);
@@ -58,20 +118,27 @@
     if (e.duration) fm.push(`duration: ${yaml(e.duration)}`);
     if (e.tags && e.tags.length) fm.push(`tags: [${e.tags.join(', ')}]`);
     fm.push('---', '');
-    const body = e.qa.map((p) => `**Q:** ${p.q}\n**A:** ${p.a}`).join('\n\n');
-    return fm.join('\n') + '\n' + body + '\n';
+    return fm.join('\n') + '\n' + e.qa.map((p) => `**Q:** ${p.q}\n**A:** ${p.a}`).join('\n\n') + '\n';
   }
-
+  const baseName = (e) => `${e.date}-${e.type}-${slugify(e.title) || 'entry'}`;
   function entryPath(e, all) {
     const [y, m] = e.date.split('-');
-    const base = `${e.date}-${e.type}-${slugify(e.title) || 'entry'}`;
-    // numbered suffix when another saved entry would get the same file name
-    const taken = (all || getEntries()).filter((x) => x.id !== e.id && x.created < e.created).map((x) => baseName(x));
+    const base = baseName(e);
+    const taken = (all || getEntries()).filter((x) => x.id !== e.id && x.created < e.created).map(baseName);
     let name = base, n = 2;
     while (taken.includes(name)) name = `${base}-${n++}`;
     return `entries/${y}/${m}/${name}.md`;
   }
-  const baseName = (e) => `${e.date}-${e.type}-${slugify(e.title) || 'entry'}`;
+  // Answers aligned to the template questions, for editing. Older entries without `ans` are matched by question text.
+  function answersOf(e) {
+    const t = T[e.type]; if (!t) return [];
+    if (Array.isArray(e.ans)) return t.questions.map((_, i) => e.ans[i] || '');
+    return t.questions.map((q) => {
+      if (q.kind === 'tags') return (e.tags || []).join(', ');
+      const hit = e.qa.find((p) => p.q === q.q);
+      return hit ? hit.a : '';
+    });
+  }
 
   // ---------- downloads / zip ----------
   function download(name, mime, data) {
@@ -80,7 +147,6 @@
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
-
   function crc32(bytes) {
     let crc = 0xffffffff;
     for (let i = 0; i < bytes.length; i++) {
@@ -89,7 +155,6 @@
     }
     return (crc ^ 0xffffffff) >>> 0;
   }
-
   // Minimal store-only zip so the files keep their entries/YYYY/MM/ paths.
   function makeZip(files) {
     const enc = new TextEncoder();
@@ -119,59 +184,181 @@
     end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
     return new Blob([...chunks, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
   }
-
   function markExported(ids) {
     const list = getEntries(), stamp = Date.now();
     list.forEach((e) => { if (ids.includes(e.id)) e.exportedAt = stamp; });
     setEntries(list);
   }
 
-  // ---------- views ----------
+  // ---------- install ----------
+  let deferredInstall = null;
+  const isIOS = /iphone|ipad/i.test(navigator.userAgent) && !navigator.standalone;
+  const installed = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; if (/^#?\/?$/.test(location.hash) || location.hash === '#/more') route(); });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; route(); });
+  const askInstall = () => { if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; } };
+
+  // ====================== VIEWS ======================
+
   function homeView() {
+    shell({ top: logo(), tab: 'capture' });
     const draft = getDraft();
-    const entries = getEntries().sort((a, b) => (a.date === b.date ? b.created - a.created : a.date < b.date ? 1 : -1));
-    const pending = entries.filter((e) => !e.exportedAt).length;
-    const nodes = [];
+    const entries = getEntries().sort((a, b) => b.created - a.created);
+    let installDismissed = false; try { installDismissed = sessionStorage.getItem('sb.noinstall') === '1'; } catch (e) { /* ignore */ }
 
-    if (draft && T[draft.type]) {
-      nodes.push(h('div', { class: 'card draft' },
-        h('p', null, `Unfinished ${T[draft.type].label.toLowerCase()} entry (question ${draft.idx + 1} of ${T[draft.type].questions.length}).`),
-        h('div', { class: 'row' },
-          h('a', { class: 'btn', href: `#/new/${draft.type}` }, 'Continue'),
-          h('button', { class: 'btn ghost', onclick: () => { if (confirm('Throw away this unfinished entry?')) { setDraft(null); route(); } } }, 'Discard'))));
-    }
+    view(
+      h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'What do you want to capture?'),
+      h('p', { class: 'lead' }, 'Pick a type. You will be asked one question at a time, and your words are kept exactly as you write them.'),
 
-    nodes.push(h('h2', null, 'What do you want to capture?'));
-    nodes.push(h('div', { class: 'types' }, Object.entries(T).map(([key, t]) =>
-      h('a', { class: 'type', href: `#/new/${key}` }, h('strong', null, t.label), h('span', null, t.blurb)))));
+      draft && T[draft.type] ? h('div', { class: `banner ${typeClass(draft.type)}` },
+        badge(draft.type),
+        h('div', { class: 'grow' }, h('strong', null, `Unfinished ${T[draft.type].label.toLowerCase()}`), h('span', { class: 'sub' }, `Question ${draft.idx + 1} of ${T[draft.type].questions.length}`)),
+        h('a', { class: 'btn sm', href: `#/new/${draft.type}` }, 'Continue'),
+        h('button', { class: 'icon-btn', 'aria-label': 'Discard draft', onclick: () => discardDraft() }, svg('trash'))) : null,
 
-    nodes.push(h('h2', null, 'Your entries'));
-    if (!entries.length) {
-      nodes.push(h('p', { class: 'muted' }, 'Nothing yet. Pick a type above and I will ask the questions one at a time.'));
-    } else {
-      if (pending) nodes.push(h('p', { class: 'muted' }, `${pending} not exported yet. They exist only on this device until you export them.`));
-      nodes.push(h('ul', { class: 'list' }, entries.map((e) =>
-        h('li', null, h('a', { href: `#/entry/${e.id}` },
-          h('span', { class: 'chip' }, T[e.type] ? T[e.type].label : e.type),
-          h('span', { class: 'date' }, e.date),
-          h('span', { class: 'ttl' }, e.title || (e.qa[0] ? e.qa[0].a.split('\n')[0].slice(0, 80) : '(empty)')),
-          e.exportedAt ? null : h('span', { class: 'dot', title: 'Not exported yet' }))))));
-      nodes.push(h('div', { class: 'row wrap' },
-        h('button', { class: 'btn', onclick: exportAll }, 'Export all as .zip'),
-        h('button', { class: 'btn ghost', onclick: backup }, 'Backup (.json)'),
-        h('label', { class: 'btn ghost file' }, 'Restore backup', h('input', { type: 'file', accept: 'application/json,.json', onchange: restore }))));
-      nodes.push(h('p', { class: 'muted small' }, 'The zip keeps the entries/YYYY/MM/ folders. Unzip it into your second-brain repo and commit.'));
-    }
-    render(...nodes);
+      deferredInstall && !installDismissed && !installed() ? h('div', { class: 'banner' },
+        h('div', { class: 'grow' }, h('strong', null, 'Install Second Brain'), h('span', { class: 'sub' }, 'Open it like an app, even offline.')),
+        h('button', { class: 'btn sm', onclick: askInstall }, 'Install'),
+        h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { try { sessionStorage.setItem('sb.noinstall', '1'); } catch (e) { /* ignore */ } homeView(); } }, svg('close'))) : null,
+
+      h('div', { class: 'section' }, h('h2', null, 'Start a new entry')),
+      h('div', { class: 'types' }, Object.entries(T).map(([key, t]) =>
+        h('a', { class: `tile ${typeClass(key)}`, href: `#/new/${key}` },
+          badge(key), h('strong', null, t.label), h('span', null, t.blurb), h('small', null, plural(t.questions.filter((q) => q.kind !== 'tags').length, 'question'))))),
+
+      h('div', { class: 'section' }, h('h2', null, 'Recent'), entries.length ? h('a', { href: '#/entries' }, 'See all') : null),
+      entries.length ? entries.slice(0, 3).map(entryRow) : emptyState('Nothing captured yet', 'Your first entry will show up here.')
+    );
+  }
+
+  function discardDraft() {
+    const draft = getDraft(); if (!draft) return;
+    setDraft(null); homeView();
+    toast('Draft discarded.', { label: 'Undo', run: () => { setDraft(draft); if (!location.hash || location.hash === '#/') homeView(); } });
+  }
+
+  function emptyState(head, text) {
+    return h('div', { class: 'empty' }, h('div', { class: 'badge' }, svg('notebook')), h('h3', null, head), h('p', null, text));
+  }
+
+  function excerpt(e) {
+    const first = e.qa.find((p) => p.a.trim());
+    return first ? first.a.replace(/\s+/g, ' ').trim() : '';
+  }
+  function entryRow(e) {
+    return h('a', { class: `entry ${typeClass(e.type)}`, href: `#/entry/${e.id}` },
+      badge(e.type),
+      h('div', { class: 'body' },
+        h('div', { class: 'ttl' }, e.title || (T[e.type] ? T[e.type].label : e.type) + ' · ' + dayLabel(e.date)),
+        h('div', { class: 'ex' }, excerpt(e)),
+        h('div', { class: 'meta' }, h('span', null, dayLabel(e.date)), e.duration ? h('span', null, e.duration) : null,
+          e.exportedAt ? null : h('span', { class: 'pending', title: 'Not exported yet' }), e.exportedAt ? null : h('span', null, 'Not exported'))));
+  }
+
+  // --- entries ---
+  const filters = { q: '', type: 'all' };
+  function entriesView() {
+    shell({ top: title('Entries'), tab: 'entries' });
+    const all = getEntries();
+    const list = h('div', { id: 'entry-list' });
+    const draw = () => {
+      const q = filters.q.trim().toLowerCase();
+      const rows = all.filter((e) => (filters.type === 'all' || e.type === filters.type) &&
+        (!q || [e.title, e.source, (e.tags || []).join(' '), e.qa.map((p) => p.a).join(' ')].join(' ').toLowerCase().includes(q)))
+        .sort((a, b) => (a.date === b.date ? b.created - a.created : a.date < b.date ? 1 : -1));
+      if (!rows.length) { list.replaceChildren(all.length ? emptyState('No matches', 'Try a different word or type.') : emptyState('No entries yet', 'Capture something and it will appear here.')); return; }
+      const out = []; let last = '';
+      rows.forEach((e) => { if (e.date !== last) { out.push(h('div', { class: 'day' }, dayLabel(e.date))); last = e.date; } out.push(entryRow(e)); });
+      list.replaceChildren(...out);
+    };
+    const pending = all.filter((e) => !e.exportedAt).length;
+    const chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter by type' });
+    const drawChips = () => chips.replaceChildren(...[['all', 'All'], ...Object.entries(T).map(([k, t]) => [k, t.label])].map(([k, label]) =>
+      h('button', { class: 'chip', 'aria-pressed': String(filters.type === k), onclick: () => { filters.type = k; drawChips(); draw(); } }, label)));
+    drawChips();
+
+    view(
+      all.length ? h('div', { class: 'search' }, svg('search'),
+        h('input', { type: 'search', placeholder: 'Search your entries', 'aria-label': 'Search entries', value: filters.q, oninput: (ev) => { filters.q = ev.target.value; draw(); } })) : null,
+      all.length ? chips : null,
+      pending ? h('p', { class: 'sub', style: 'margin-top:.5rem' }, `${plural(pending, 'entry', 'entries')} not exported yet. They exist only on this device until you export them. `, h('a', { href: '#/more' }, 'Export')) : null,
+      list);
+    draw();
+  }
+
+  // --- entry detail ---
+  function entryView(id) {
+    const all = getEntries(), e = all.find((x) => x.id === id);
+    if (!e) { location.hash = '#/entries'; return; }
+    shell({ top: [backBtn('#/entries', 'Back to entries'), title(T[e.type] ? T[e.type].label : 'Entry')], tab: 'entries' });
+    const md = entryToMarkdown(e), path = entryPath(e, all), file = path.split('/').pop();
+    const mkFile = () => new File([md], file, { type: 'text/markdown' });
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [mkFile()] }));
+    const body = h('div');
+    let mode = 'read';
+    const draw = () => {
+      body.replaceChildren(...(mode === 'read'
+        ? e.qa.map((p) => h('div', { class: 'qa' }, h('div', { class: 'q' }, p.q), h('div', { class: 'a' }, p.a)))
+        : [h('pre', { class: 'md' }, md), h('p', { class: 'sub', style: 'margin-top:.5rem' }, 'Saves as ' + path)]));
+      seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === mode)));
+    };
+    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'View' },
+      h('button', { 'data-m': 'read', onclick: () => { mode = 'read'; draw(); } }, 'Read'),
+      h('button', { 'data-m': 'md', onclick: () => { mode = 'md'; draw(); } }, 'Markdown'));
+
+    view(
+      h('div', { class: `dhead ${typeClass(e.type)}` },
+        h('div', { class: 'metas' }, h('span', { class: 'meta-chip' }, dayLabel(e.date)), e.duration ? h('span', { class: 'meta-chip' }, e.duration) : null,
+          e.source ? h('span', { class: 'meta-chip' }, e.source) : null, (e.tags || []).map((t) => h('span', { class: 'tag' }, '#' + t))),
+        e.title ? h('h1', null, e.title) : null),
+      h('p', { class: 'sub', style: 'margin-top:.6rem' }, e.exportedAt ? 'Exported. Still saved on this device.' : 'Saved on this device only. Export it to keep a copy.'),
+      h('div', { class: 'btn-row', style: 'margin-top:1rem' },
+        h('button', { class: 'btn', onclick: () => { download(file, 'text/markdown', md); markExported([e.id]); toast('Downloaded ' + file); } }, svg('download'), 'Download .md'),
+        h('button', { class: 'btn secondary', onclick: () => navigator.clipboard.writeText(md).then(() => { markExported([e.id]); toast('Copied as markdown.'); }, () => toast('Copying was blocked by the browser.')) }, svg('copy'), 'Copy'),
+        canShare ? h('button', { class: 'btn secondary', onclick: () => navigator.share({ files: [mkFile()] }).then(() => markExported([e.id])).catch(() => {}) }, svg('share'), 'Share') : null),
+      seg, body,
+      h('div', { class: 'btn-row', style: 'margin-top:1.5rem' },
+        h('a', { class: 'btn secondary', href: `#/edit/${e.id}` }, svg('edit'), 'Edit'),
+        h('button', { class: 'btn danger', onclick: () => deleteEntry(e) }, svg('trash'), 'Delete')));
+    draw();
+  }
+
+  function deleteEntry(e) {
+    setEntries(getEntries().filter((x) => x.id !== e.id));
+    location.hash = '#/entries';
+    toast('Entry deleted.', { label: 'Undo', run: () => { const l = getEntries(); l.push(e); setEntries(l); if (location.hash === '#/entries') entriesView(); } });
+  }
+
+  // --- more ---
+  function moreView() {
+    shell({ top: title('More'), tab: 'more' });
+    const all = getEntries();
+    const row = (icon, head, text, attrs) => h(attrs.href ? 'a' : 'button', Object.assign({ class: 'row-item' }, attrs),
+      h('div', { class: 'ico' }, svg(icon)), h('div', { class: 'txt' }, h('strong', null, head), h('span', null, text)), svg('chevron'));
+    view(
+      h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'More'),
+      h('div', { class: 'section' }, h('h2', null, 'About')),
+      h('div', { class: 'rows' }, row('info', 'Why these questions', 'Where each question comes from, and its limits', { href: '#/about' })),
+      h('div', { class: 'section' }, h('h2', null, 'Your data')),
+      h('div', { class: 'rows' },
+        row('download', 'Export all as .zip', all.length ? `${plural(all.length, 'entry', 'entries')}, in entries/YYYY/MM/ folders` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: all.length ? null : true }),
+        row('download', 'Backup (.json)', 'A full copy you can restore later', { onclick: backup, disabled: all.length ? null : true }),
+        h('label', { class: 'row-item', style: 'position:relative' },
+          h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds entries from a .json backup')),
+          h('input', { type: 'file', accept: 'application/json,.json', onchange: restore, style: 'position:absolute;inset:0;opacity:0;cursor:pointer', 'aria-label': 'Restore a backup file' }))),
+      h('p', { class: 'sub', style: 'margin-top:.6rem' }, 'Unzip the export into your second-brain repo and commit it. Your answers never leave this device unless you export them. Clearing browser data deletes them, so export now and then.'),
+      !installed() && (deferredInstall || isIOS) ? [
+        h('div', { class: 'section' }, h('h2', null, 'App')),
+        h('div', { class: 'rows' }, deferredInstall
+          ? row('phone', 'Install Second Brain', 'Add it to your home screen; works offline', { onclick: askInstall })
+          : h('div', { class: 'row-item' }, h('div', { class: 'ico' }, svg('phone')), h('div', { class: 'txt' }, h('strong', null, 'Install on iPhone or iPad'), h('span', null, 'Tap Share, then "Add to Home Screen".'))))] : null);
   }
 
   function exportAll() {
-    const list = getEntries();
-    const files = list.map((e) => ({ name: entryPath(e, list), content: entryToMarkdown(e) }));
-    download(`second-brain-${today()}.zip`, 'application/zip', makeZip(files));
+    const list = getEntries(); if (!list.length) return;
+    download(`second-brain-${today()}.zip`, 'application/zip', makeZip(list.map((e) => ({ name: entryPath(e, list), content: entryToMarkdown(e) }))));
     markExported(list.map((e) => e.id));
-    toast(`Exported ${files.length} entries.`);
-    homeView();
+    toast(`Exported ${plural(list.length, 'entry', 'entries')}.`);
   }
   function backup() {
     download(`second-brain-backup-${today()}.json`, 'application/json', JSON.stringify(getEntries(), null, 2));
@@ -183,136 +370,195 @@
       const incoming = JSON.parse(txt);
       if (!Array.isArray(incoming)) throw new Error('not a list');
       const have = getEntries(), ids = new Set(have.map((e) => e.id));
-      const add = incoming.filter((e) => e && e.id && e.type && e.date && Array.isArray(e.qa) && !ids.has(e.id));
+      const add = incoming.filter((e) => e && e.id && T[e.type] && e.date && Array.isArray(e.qa) && !ids.has(e.id));
       setEntries(have.concat(add));
-      toast(`Restored ${add.length} entries.`); homeView();
+      toast(`Restored ${add.length} ${add.length === 1 ? 'entry' : 'entries'}.`); moreView();
     }).catch(() => toast('That file is not a valid backup.'));
   }
 
-  // --- interview ---
-  let session = null; // { type, idx, answers[], from }
+  // --- about / sources ---
+  function aboutView(focusType) {
+    shell({ top: [backBtn('#/more', 'Back'), title('Why these questions')], tab: 'more' });
+    view(
+      h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'Why these questions'),
+      h('p', { class: 'lead' }, 'Nothing here is made up. Every question traces to a published framework. The questions are plain-language adaptations of these works, not copies of any book\'s exact protocol.'),
+      Object.entries(T).map(([key, t]) =>
+        h('div', { class: `card src-card ${typeClass(key)}`, id: 'src-' + key, style: 'margin-top:.9rem' },
+          h('h3', null, badge(key), t.label),
+          h('p', { class: 'fw' }, 'Frameworks: ' + t.frameworks + '.'),
+          h('ul', null, (window.SOURCES[key] || []).map((s) => h('li', null, s))))),
+      h('div', { class: 'section' }, h('h2', null, 'Honest limits')),
+      h('div', { class: 'note' }, h('ul', { style: 'margin:0' }, window.SOURCES_LIMITS.map((s) => h('li', null, s)))),
+      h('p', { class: 'sub', style: 'margin-top:1rem' }, 'The small label under each question names the idea it comes from. "record" means the question only notes a fact.'));
+    if (focusType && T[focusType]) { const el = document.getElementById('src-' + focusType); if (el) el.scrollIntoView(); }
+  }
+
+  // ====================== INTERVIEW ======================
+  let session = null; // { type, idx, answers[], date, title, source, duration, editId, review }
+  const persist = () => { if (session && !session.editId) setDraft(session); };
 
   function startOrResume(type) {
-    const t = T[type]; if (!t) { location.hash = ''; return; }
+    const t = T[type]; if (!t) { location.hash = '#/'; return; }
     const draft = getDraft();
-    if (draft && draft.type === type) { session = draft; return interviewView(); }
-    if (draft && !confirm(`You have an unfinished ${T[draft.type].label.toLowerCase()} entry. Replace it?`)) { location.hash = `#/new/${draft.type}`; return; }
+    if (session && session.type === type && !session.editId) { return session.review ? reviewView() : interviewView(); }
+    if (draft && draft.type === type) { session = draft; return session.review ? reviewView() : interviewView(); }
     session = { type, idx: 0, answers: t.questions.map(() => ''), date: today() };
+    if (draft) setDraft(null); // starting another type replaces the old draft (the banner offered Discard)
     if (t.checkInFrom) return habitChoiceView();
-    setDraft(session); interviewView();
+    persist(); interviewView();
+  }
+
+  function leave() {
+    if (session && session.editId) { const id = session.editId; session = null; location.hash = `#/entry/${id}`; return; }
+    persist(); session = null; toast('Draft saved. Continue from the home screen.'); location.hash = '#/';
   }
 
   function habitChoiceView() {
     const t = T.habit;
-    render(h('h2', null, 'Habit'),
-      h('p', null, 'Was this habit set up in an earlier entry?'),
-      h('div', { class: 'row wrap' },
-        h('button', { class: 'btn', onclick: () => { session.idx = t.checkInFrom - 1; setDraft(session); interviewView(); } }, `Yes, check in (start at question ${t.checkInFrom})`),
-        h('button', { class: 'btn ghost', onclick: () => { setDraft(session); interviewView(); } }, 'No, set up a new habit')),
-      h('p', { class: 'muted small' }, 'Frameworks: ' + t.frameworks));
+    shell({ top: [h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => { session = null; location.hash = '#/'; } }, svg('close')), title('Habit')], focus: true });
+    view(
+      h('div', { class: `qwrap ${typeClass('habit')}` },
+        h('div', { class: 'question' }, 'Was this habit set up in an earlier entry?'),
+        h('p', { class: 'hint' }, 'A check-in skips the set-up questions and starts with "did you do it?".'),
+        h('button', { class: 'choice', onclick: () => { session.idx = t.checkInFrom - 1; persist(); interviewView(); } }, h('strong', null, 'Yes, check in'), h('span', null, `Start at question ${t.checkInFrom} of ${t.questions.length - 1}`)),
+        h('button', { class: 'choice', onclick: () => { persist(); interviewView(); } }, h('strong', null, 'No, set up a new habit'), h('span', null, 'Start from the beginning'))));
   }
 
   function interviewView() {
-    const t = T[session.type], q = t.questions[session.idx], total = t.questions.length;
-    const isTags = q.kind === 'tags', last = session.idx === total - 1;
+    const t = T[session.type], total = t.questions.length, q = t.questions[session.idx];
+    const isTags = q.kind === 'tags', last = session.idx === total - 1, review = !!session.review;
+    session.review = review;
+    const saved = h('span', null, '');
+    let savedTimer;
     const input = isTags
-      ? h('input', { type: 'text', id: 'ans', autocomplete: 'off', placeholder: 'Separate with commas', value: session.answers[session.idx] })
-      : h('textarea', { id: 'ans', rows: 6, value: session.answers[session.idx], placeholder: 'Type your answer in your own words (any language)' });
-    const keep = () => { session.answers[session.idx] = input.value; setDraft(session); };
-    input.addEventListener('input', keep);
-
+      ? h('input', { class: 'answer', type: 'text', id: 'ans', autocomplete: 'off', style: 'min-height:56px;height:56px', placeholder: 'For example: flute, practice', value: session.answers[session.idx] })
+      : h('textarea', { class: 'answer', id: 'ans', rows: 4, placeholder: 'Type in your own words, in any language', value: session.answers[session.idx], 'aria-describedby': 'hint' });
+    const preview = h('div', { class: 'tagpreview' });
+    const grow = () => { if (!isTags) { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight + 2, window.innerHeight * 0.5) + 'px'; } };
+    const drawTags = () => preview.replaceChildren(...input.value.split(',').map((s) => s.trim()).filter(Boolean).map((s) => h('span', { class: 'tag' }, '#' + s)));
+    input.addEventListener('input', () => {
+      session.answers[session.idx] = input.value; persist(); grow(); if (isTags) drawTags();
+      saved.textContent = 'Saved on this device'; clearTimeout(savedTimer); savedTimer = setTimeout(() => { saved.textContent = ''; }, 1500);
+    });
     const go = (delta, skip) => {
-      if (skip) input.value = '';
-      keep();
+      if (skip) { input.value = ''; session.answers[session.idx] = ''; }
       const next = session.idx + delta;
-      if (next < 0) { return homeLeave(); }
-      if (next >= total) { return finishView(); }
-      session.idx = next; setDraft(session); interviewView();
+      if (review || next >= total) { session.review = true; persist(); return reviewView(); }
+      if (next < 0) return leave();
+      session.idx = next; persist(); interviewView();
     };
-    const homeLeave = () => { location.hash = ''; };
+    input.addEventListener('keydown', (ev) => { if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); go(1); } if (isTags && ev.key === 'Enter') { ev.preventDefault(); go(1); } });
 
-    render(
-      h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 1, 'aria-valuemax': total, 'aria-valuenow': session.idx + 1 },
-        h('i', { style: `width:${((session.idx + 1) / total) * 100}%` })),
-      h('p', { class: 'muted small' }, `${t.label} · question ${session.idx + 1} of ${total}`),
-      h('label', { for: 'ans', class: 'question' }, q.q),
-      q.hint ? h('p', { class: 'hint' }, q.hint) : null,
-      input,
-      q.why ? h('p', { class: 'why' }, q.why) : null,
-      h('div', { class: 'row wrap nav' },
-        h('button', { class: 'btn ghost', onclick: () => go(-1) }, session.idx === 0 ? 'Leave' : 'Back'),
+    const why = [
+      h('p', null, h('strong', null, 'Framework: '), t.frameworks + '.'),
+      h('p', null, h('strong', null, 'This question: '), q.why === 'record' ? 'It only records a fact for the entry.' : q.why + '.'),
+      h('p', null, h('a', { href: `#/about/${session.type}` }, 'See the full sources'), ' (your answers so far are kept).')
+    ];
+
+    shell({
+      top: [h('button', { class: 'icon-btn', 'aria-label': review ? 'Back to review' : 'Close and save draft', onclick: () => (review ? (reviewView()) : leave()) }, svg(review ? 'back' : 'close')),
+        h('div', { class: `progress ${typeClass(session.type)}`, role: 'progressbar', 'aria-valuemin': 1, 'aria-valuemax': total, 'aria-valuenow': session.idx + 1, 'aria-label': 'Progress' },
+          t.questions.map((_, i) => h('i', { class: i < session.idx ? 'done' : i === session.idx ? 'now' : '' }))),
+        h('span', { class: 'count' }, `${session.idx + 1}/${total}`)],
+      focus: true
+    });
+    view(
+      h('div', { class: `qwrap ${typeClass(session.type)}` },
+        h('span', { class: 'qtype' }, svg(session.type), t.label),
+        h('label', { class: 'question', for: 'ans' }, q.q),
+        q.hint ? h('p', { class: 'hint', id: 'hint' }, q.hint) : null,
+        input, isTags ? preview : null,
+        h('div', { class: 'answer-foot' }, saved, window.matchMedia('(pointer: fine)').matches ? h('span', { class: 'kbd' }, 'Ctrl + Enter for next') : null),
+        h('details', { class: 'why' }, h('summary', null, 'Why this question?'), h('div', { class: 'in' }, why))),
+      h('div', { class: 'actionbar' },
+        h('button', { class: 'btn secondary', onclick: () => (review ? reviewView() : go(-1)) }, review ? 'Cancel' : session.idx === 0 ? 'Close' : 'Back'),
         h('button', { class: 'btn ghost', onclick: () => go(1, true) }, 'Skip'),
-        h('button', { class: 'btn', onclick: () => go(1) }, last ? 'Review' : 'Next')));
-    input.focus();
+        h('button', { class: 'btn primary', onclick: () => go(1) }, review ? 'Done' : last ? 'Review' : 'Next')));
+    if (isTags) drawTags();
+    grow();
+    input.focus({ preventScroll: true });
+    if (!isTags) input.setSelectionRange(input.value.length, input.value.length);
   }
 
-  function finishView() {
+  function reviewView() {
     const t = T[session.type];
-    const f = { title: session.title || '', source: session.source || '', duration: session.duration || '', date: session.date || today() };
-    const field = (id, label, hint, val, type) => h('label', { class: 'field' }, label, h('input', { id, type: type || 'text', value: val, oninput: (e) => { f[id] = e.target.value; session[id] = e.target.value; setDraft(session); } }), hint ? h('small', null, hint) : null);
-    const wantsSource = session.type === 'learning', wantsDuration = session.type === 'session' || session.type === 'learning';
-    render(h('h2', null, 'Almost done'),
-      h('p', { class: 'muted' }, 'All optional except the date. Fill in only what you want in the entry.'),
-      field('title', 'Title', 'In your own words.', f.title),
-      wantsSource ? field('source', 'Source', 'Name, URL or author.', f.source) : null,
-      wantsDuration ? field('duration', 'Duration', 'For example 1h or 2h.', f.duration) : null,
-      field('date', 'Date', null, f.date, 'date'),
-      h('div', { class: 'row wrap nav' },
-        h('button', { class: 'btn ghost', onclick: () => { session.idx = t.questions.length - 1; interviewView(); } }, 'Back'),
-        h('button', { class: 'btn', onclick: () => saveEntry(f) }, 'Save entry')));
+    session.review = true; persist();
+    const edit = !!session.editId;
+    shell({ top: [h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: leave }, svg('close')), title(edit ? 'Edit entry' : 'Review')], focus: true });
+    const field = (id, label, hint, type) => h('label', { class: 'field' }, label,
+      h('input', { type: type || 'text', value: session[id] || '', oninput: (ev) => { session[id] = ev.target.value; persist(); } }), hint ? h('small', null, hint) : null);
+    const skippedAll = t.questions.every((q, i) => !(session.answers[i] || '').trim());
+    view(
+      h('div', { class: `qwrap ${typeClass(session.type)}` },
+        h('span', { class: 'qtype' }, svg(session.type), t.label),
+        h('h1', { class: 'h-lg', style: 'margin:.75rem 0 .25rem' }, edit ? 'Edit your answers' : 'Check your entry'),
+        h('p', { class: 'lead', style: 'margin-bottom:.5rem' }, 'Tap Edit to change an answer. Skipped questions are left out of the saved entry.'),
+        t.questions.map((q, i) => {
+          const a = (session.answers[i] || '').trim();
+          return h('div', { class: 'qa' },
+            h('button', { class: 'btn sm secondary edit', onclick: () => { session.idx = i; interviewView(); } }, a ? 'Edit' : 'Answer'),
+            h('div', { class: 'q' }, stripOptional(q.q)),
+            h('div', { class: 'a' + (a ? '' : ' skipped') }, a || 'Skipped'));
+        }),
+        h('div', { class: 'section' }, h('h2', null, 'Details (optional)')),
+        field('title', 'Title', 'In your own words. Used in the file name.'),
+        session.type === 'learning' ? field('source', 'Source', 'Name, URL or author.') : null,
+        session.type === 'session' || session.type === 'learning' ? field('duration', 'Duration', 'For example 1h or 2h.') : null,
+        field('date', 'Date', null, 'date')),
+      h('div', { class: 'actionbar' },
+        h('button', { class: 'btn secondary', onclick: () => { session.review = false; session.idx = edit ? 0 : t.questions.length - 1; interviewView(); } }, 'Back'),
+        h('button', { class: 'btn primary', onclick: () => (skippedAll ? toast('Every question was skipped, so there is nothing to save.') : saveEntry()) }, edit ? 'Save changes' : 'Save entry')));
   }
 
-  function saveEntry(f) {
-    const t = T[session.type];
-    const qa = [], tags = [];
+  function saveEntry() {
+    const t = T[session.type], qa = [], tags = [];
     t.questions.forEach((q, i) => {
       const a = (session.answers[i] || '').replace(/\s+$/g, '');
       if (!a.trim()) return;
       if (q.kind === 'tags') a.split(',').map((s) => s.trim()).filter(Boolean).forEach((s) => tags.push(s));
-      else qa.push({ q: q.q.replace(/\s*\(optional\)$/, ''), a });
+      else qa.push({ q: stripOptional(q.q), a });
     });
-    if (!qa.length) { toast('Every question was skipped, so there is nothing to save.'); return; }
-    const entry = { id: uid(), created: Date.now(), type: session.type, date: f.date || today(), title: f.title.trim(), source: f.source.trim(), duration: f.duration.trim(), tags, qa };
-    const list = getEntries(); list.push(entry);
-    if (!setEntries(list)) return;
+    const list = getEntries(), old = session.editId ? list.find((x) => x.id === session.editId) : null;
+    const entry = {
+      id: old ? old.id : uid(), created: old ? old.created : Date.now(), type: session.type, date: session.date || today(),
+      title: (session.title || '').trim(), source: (session.source || '').trim(), duration: (session.duration || '').trim(),
+      tags, qa, ans: session.answers.slice()
+    };
+    const next = old ? list.map((x) => (x.id === old.id ? entry : x)) : list.concat(entry);
+    if (!setEntries(next)) return;
     setDraft(null); session = null;
+    toast(old ? 'Changes saved.' : 'Entry saved.');
     location.hash = `#/entry/${entry.id}`;
   }
 
-  function entryView(id) {
-    const list = getEntries(), e = list.find((x) => x.id === id);
-    if (!e) { location.hash = ''; return; }
-    const md = entryToMarkdown(e), path = entryPath(e, list), file = path.split('/').pop();
-    const canShare = navigator.canShare && navigator.canShare({ files: [new File([md], file, { type: 'text/markdown' })] });
-    render(
-      h('p', null, h('a', { href: '#' }, '← All entries')),
-      h('p', { class: 'muted small' }, 'Saved on this device. ' + (e.exportedAt ? 'Exported.' : 'Not exported yet.')),
-      h('pre', { class: 'md' }, md),
-      h('p', { class: 'muted small' }, 'File: ' + path),
-      h('div', { class: 'row wrap' },
-        h('button', { class: 'btn', onclick: () => { download(file, 'text/markdown', md); markExported([e.id]); } }, 'Download .md'),
-        h('button', { class: 'btn ghost', onclick: () => navigator.clipboard.writeText(md).then(() => { markExported([e.id]); toast('Copied.'); }, () => toast('Copy was blocked by the browser.')) }, 'Copy'),
-        canShare ? h('button', { class: 'btn ghost', onclick: () => navigator.share({ files: [new File([md], file, { type: 'text/markdown' })] }).then(() => markExported([e.id])).catch(() => {}) }, 'Share') : null,
-        h('button', { class: 'btn danger', onclick: () => { if (confirm('Delete this entry from this device? Exported copies are not affected.')) { setEntries(getEntries().filter((x) => x.id !== e.id)); location.hash = ''; } } }, 'Delete')));
+  function editView(id) {
+    const e = getEntries().find((x) => x.id === id);
+    if (!e || !T[e.type]) { location.hash = '#/entries'; return; }
+    if (!session || session.editId !== id) {
+      session = { type: e.type, idx: 0, answers: answersOf(e), date: e.date, title: e.title, source: e.source, duration: e.duration, editId: id, review: true };
+    }
+    reviewView();
   }
 
-  // ---------- router ----------
+  // ====================== ROUTER ======================
   function route() {
-    const [, kind, arg] = location.hash.match(/^#\/(\w+)\/?([\w-]*)/) || [];
-    if (kind === 'new') return startOrResume(arg);
-    if (kind === 'entry') return entryView(arg);
-    homeView();
+    const [, kind, arg] = location.hash.match(/^#\/(\w*)\/?([\w-]*)/) || [];
+    // leaving an unsaved edit by navigating elsewhere drops it
+    if (session && session.editId && !(kind === 'edit' && arg === session.editId)) session = null;
+    if (kind !== 'entries' && kind !== 'entry') { filters.q = ''; filters.type = 'all'; }
+    switch (kind) {
+      case 'new': return startOrResume(arg);
+      case 'edit': return editView(arg);
+      case 'entry': return entryView(arg);
+      case 'entries': return entriesView();
+      case 'more': return moreView();
+      case 'about': return aboutView(arg);
+      default: return homeView();
+    }
   }
   window.addEventListener('hashchange', route);
   route();
 
-  // ---------- install + offline ----------
-  const installBtn = document.getElementById('install');
-  let deferred;
-  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; installBtn.hidden = false; });
-  installBtn.addEventListener('click', () => { if (deferred) { deferred.prompt(); deferred = null; installBtn.hidden = true; } });
-  window.addEventListener('appinstalled', () => { installBtn.hidden = true; });
-  if (/iphone|ipad/i.test(navigator.userAgent) && !navigator.standalone) document.getElementById('ios-tip').hidden = false;
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 })();

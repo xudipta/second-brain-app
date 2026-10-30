@@ -2,6 +2,12 @@
 
 An installable web app for the [second-brain](https://github.com/xudipta/second-brain) notebook. It asks the interview questions one at a time and stores your answers exactly as you type them. It never writes, suggests or rewrites anything.
 
+## Screens
+- **Capture**: pick a type; a focused one-question-at-a-time screen with progress, Back/Skip/Next, autosave, and a "Why this question?" panel naming the framework behind it.
+- **Review**: check every answer, edit or fill any, add title/source/duration/date, then save.
+- **Entries**: search, filter by type, read an entry, view its markdown, edit, delete (with undo).
+- **More**: export (.zip), backup/restore, install, and **Why these questions** (the sources, copied from second-brain's SOURCES.md).
+
 ## How it works
 - Types: idea, learning, session, journal, habit. The questions are copied from `second-brain/templates/` (see `assets/templates.js`), each with the framework it comes from shown under the question.
 - Skip any question; skipped questions are left out of the entry.
@@ -11,7 +17,7 @@ An installable web app for the [second-brain](https://github.com/xudipta/second-
 - Installable (manifest + service worker) and works offline. Same pattern as Flute Mastery Journey.
 
 ## Changing questions
-Edit `assets/templates.js`, but only after the change is sourced in `second-brain/SOURCES.md`. No source, no question.
+Edit `assets/templates.js`, but only after the change is sourced in `second-brain/SOURCES.md`, and mirror the citation in `window.SOURCES` in the same file. No source, no question.
 
 ## Run locally
 ```sh

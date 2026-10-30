@@ -1,7 +1,7 @@
 /* Service worker: makes the app work offline.
    Network-first, so a new deploy shows up as soon as you are online; the cache is the offline fallback.
    Bump VERSION to drop old caches after a big change. */
-const VERSION = 'second-brain-v1';
+const VERSION = 'second-brain-v2';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'assets/styles.css', 'assets/app.js', 'assets/templates.js',
