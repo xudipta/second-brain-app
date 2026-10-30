@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Second Brain</title>
+  <meta name="description" content="A private capture notebook. It asks the questions one at a time and keeps your answers in your own words, on your device.">
+  <meta name="theme-color" content="#f6f5ff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f0d24" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Second Brain">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#">🧠 Second Brain</a>
+    <button id="install" class="btn small" hidden>Install app</button>
+  </header>
+  <main id="app" aria-live="polite"></main>
+  <p id="ios-tip" class="muted small tip" hidden>To install on iPhone or iPad: tap Share, then "Add to Home Screen".</p>
+  <footer>
+    <p>Your answers are stored only in this browser. Nothing is sent anywhere, and nothing is written for you. Export entries to keep them safe: clearing site data deletes them.</p>
+  </footer>
+  <div id="toast" role="status" hidden></div>
+  <noscript><p style="padding:1rem">This app needs JavaScript.</p></noscript>
+  <script src="assets/templates.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
