@@ -11,19 +11,20 @@ An installable web app for the [second-brain](https://github.com/xudipta/second-
 ## How it works
 - Types: idea, learning, session, journal, habit. The questions are copied from `second-brain/templates/` (see `assets/templates.js`), each with the framework it comes from shown under the question.
 - Skip any question; skipped questions are left out of the entry.
-- Entries are saved **only in this browser**, **encrypted** with a passphrase only you know (see Security). The site is public, your entries are not.
+- Entries are saved **only in this browser**, **encrypted** (see Security). A passphrase lock is optional. The site is public, your entries are not.
 - Export: download one entry as `.md`, copy or share it, or export everything as a `.zip` that keeps the `entries/YYYY/MM/` paths. Unzip into the second-brain repo and commit. Entries not yet exported are marked with a dot.
-- Backup and restore as `.json` (encrypted with your passphrase). Clearing site data deletes entries, so export now and then.
+- Backup and restore as `.json` (can be encrypted). Clearing site data deletes entries, so export now and then.
 - Installable (manifest + service worker) and works offline. Same pattern as Flute Mastery Journey.
 
 ## Security
-- Everything the app stores (entries and the unfinished draft) is one record in localStorage, encrypted with **AES-256-GCM**. The key is derived from your passphrase with **PBKDF2-SHA256 (600,000 rounds)** and the Web Crypto API; it lives only in memory, as a non-extractable key, while the app is unlocked. A fresh random IV is used for every write, and tampering is detected.
-- First launch asks you to set a passphrase (minimum 8 characters). Entries from the earlier unencrypted version are encrypted and the plaintext copy is deleted.
-- Locks automatically after 2 minutes in the background, or with **More → Lock now**. Change the passphrase under **More → Change passphrase**.
-- `.json` backups are encrypted too and need the passphrase they were made with; restoring on a new device sets that passphrase there.
-- **No recovery.** There is no reset and no backdoor, so a forgotten passphrase means the entries are unreadable. Export `.md` or `.zip` files if you want a copy that does not depend on it.
-- Limits: it does not protect against malware on your device, someone watching you type, or a weak passphrase. The `.md` and `.zip` exports are plain readable files by design. Deleting the stored record from the browser is not a secure disk wipe.
-- Code lives in `assets/vault.js`.
+Everything the app stores (entries and the unfinished draft) is one record in localStorage, encrypted with **AES-256-GCM** using the Web Crypto API. A fresh random IV is used for every write, and any tampering is detected. There are two ways the key is kept, and you choose:
+
+- **Automatic (default, no password).** The app opens straight away. The key is random, made by the browser and kept in this app's IndexedDB as a non-extractable key. Other apps, other sites, and tools that copy or sync the raw browser storage see only unreadable data. Anyone who can open the app on your unlocked phone can read your entries.
+- **Passphrase lock (optional, More → Add a passphrase lock).** The key comes from your passphrase (PBKDF2-SHA256, 600,000 rounds) and lives only in memory while the app is open. The app asks for it on opening, locks after 2 minutes in the background or with **Lock now**, and you can change or remove the lock any time. **There is no recovery** for a forgotten passphrase.
+
+Backups (.json): in passphrase mode they are encrypted with your passphrase; in automatic mode you can protect one with its own passphrase, or leave it empty for a plain readable file. If the browser's site data is cleared, the automatic key goes with it and the entries cannot be read, so back up now and then. Entries from the earlier unencrypted version are encrypted on first launch and the plaintext copy is deleted.
+
+Limits: it does not protect against malware on your device, someone watching you type, or a weak passphrase. The `.md` and `.zip` exports are plain readable files by design. Deleting the stored record from the browser is not a secure disk wipe. Code lives in `assets/vault.js`.
 
 ## Changing questions
 Edit `assets/templates.js`, but only after the change is sourced in `second-brain/SOURCES.md`, and mirror the citation in `window.SOURCES` in the same file. No source, no question.

@@ -1,7 +1,7 @@
 /* Second Brain capture app.
    Asks the questions from templates.js one at a time and stores the answers exactly as typed.
-   It never writes, suggests or rewrites anything. Entries live in this browser, encrypted with the owner's
-   passphrase (see vault.js), and leave only when you download, copy or share them. */
+   It never writes, suggests or rewrites anything. Entries live in this browser, encrypted with a device
+   key (see vault.js; the owner can add a passphrase lock), and leave only when you download, copy or share them. */
 (function () {
   'use strict';
   const T = window.TEMPLATES;
@@ -219,6 +219,12 @@
         h('button', { class: 'btn sm', onclick: askInstall }, 'Install'),
         h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { try { sessionStorage.setItem('sb.noinstall', '1'); } catch (e) { /* ignore */ } homeView(); } }, svg('close'))) : null,
 
+      V.currentMode() === 'device' && !V.state.tipDismissed ? h('div', { class: 'banner' },
+        h('div', { class: 'ico lockico' }, svg('lock')),
+        h('div', { class: 'grow' }, h('strong', null, 'Add a passphrase lock?'), h('span', { class: 'sub' }, 'Optional. Worth it if others use this phone.')),
+        h('a', { class: 'btn sm', href: '#/passphrase' }, 'Set up'),
+        h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { V.state.tipDismissed = true; V.touch(0); homeView(); } }, svg('close'))) : null,
+
       h('div', { class: 'section' }, h('h2', null, 'Start a new entry')),
       h('div', { class: 'types' }, Object.entries(T).map(([key, t]) =>
         h('a', { class: `tile ${typeClass(key)}`, href: `#/new/${key}` },
@@ -340,23 +346,31 @@
       h('div', { class: 'section' }, h('h2', null, 'Your data')),
       h('div', { class: 'rows' },
         row('download', 'Export all as .zip', all.length ? `${plural(all.length, 'entry', 'entries')}, in entries/YYYY/MM/ folders` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: all.length ? null : true }),
-        row('download', 'Backup (.json, encrypted)', 'A full copy, protected by your passphrase', { onclick: backup, disabled: all.length ? null : true }),
+        row('download', 'Backup (.json)', V.currentMode() === 'pass' ? 'Encrypted with your passphrase' : 'Optionally protected by its own passphrase', { onclick: backup, disabled: all.length ? null : true }),
         h('label', { class: 'row-item', style: 'position:relative' },
           h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds entries from a .json backup')),
           h('input', { type: 'file', accept: 'application/json,.json', onchange: restore, style: 'position:absolute;inset:0;opacity:0;cursor:pointer', 'aria-label': 'Restore a backup file' }))),
       h('p', { class: 'sub', style: 'margin-top:.6rem' }, 'The .zip and .md exports are plain readable files, because they are meant for your second-brain repo. Treat them accordingly. Clearing browser data deletes your entries, so back up now and then.'),
       h('div', { class: 'section' }, h('h2', null, 'Security')),
-      h('div', { class: 'rows' },
-        row('lock', 'Lock now', 'Needs your passphrase to open again', { onclick: () => lockNow() }),
-        row('key', 'Change passphrase', 'Re-encrypts everything with a new one', { href: '#/passphrase' })),
+      V.currentMode() === 'pass'
+        ? h('div', { class: 'rows' },
+          row('lock', 'Lock now', 'Needs your passphrase to open again', { onclick: () => lockNow() }),
+          row('key', 'Change passphrase', 'Re-encrypts everything with a new one', { href: '#/passphrase' }),
+          row('shield', 'Remove passphrase lock', 'Go back to opening the app without one', { onclick: removeLock }))
+        : h('div', { class: 'rows' }, row('key', 'Add a passphrase lock', 'Optional. Asks for it each time the app opens', { href: '#/passphrase' })),
       h('div', { class: 'note', style: 'margin-top:.75rem' },
         h('strong', null, 'How your data is protected'),
-        h('ul', null,
-          h('li', null, 'Entries and drafts are stored encrypted (AES-256-GCM). The key comes from your passphrase and exists only in memory while the app is open.'),
-          h('li', null, 'Other apps, other sites and anyone looking through this browser\'s storage see only unreadable data.'),
-          h('li', null, 'The app locks itself after 2 minutes in the background.'),
-          h('li', null, 'There is no way to recover a forgotten passphrase. That is what keeps it private.'),
-          h('li', null, 'It cannot protect you from malware on your device, someone watching you type, or a weak passphrase.'))),
+        V.currentMode() === 'pass'
+          ? h('ul', null,
+            h('li', null, 'Entries and drafts are stored encrypted (AES-256-GCM). The key comes from your passphrase and exists only in memory while the app is open.'),
+            h('li', null, 'Other apps, other sites and anyone looking through this browser\'s storage see only unreadable data.'),
+            h('li', null, 'The app locks itself after 2 minutes in the background.'),
+            h('li', null, 'There is no way to recover a forgotten passphrase. That is what keeps it private.'),
+            h('li', null, 'It cannot protect you from malware on your device, someone watching you type, or a weak passphrase.'))
+          : h('ul', null,
+            h('li', null, 'Entries and drafts are stored encrypted (AES-256-GCM) with a key the browser keeps for this app only. There is no password to remember.'),
+            h('li', null, 'Other apps, other sites, and tools that copy or sync this browser\'s raw storage see only unreadable data.'),
+            h('li', null, 'Anyone who can open this app on your unlocked phone can read your entries. Add a passphrase lock if that matters.'))),
       !installed() && (deferredInstall || isIOS) ? [
         h('div', { class: 'section' }, h('h2', null, 'App')),
         h('div', { class: 'rows' }, deferredInstall
@@ -371,8 +385,10 @@
     toast(`Exported ${plural(list.length, 'entry', 'entries')}.`);
   }
   async function backup() {
-    download(`second-brain-backup-${today()}.json`, 'application/json', await V.exportBackup());
-    toast('Encrypted backup downloaded.');
+    let pass; // undefined: use the vault's own key (passphrase mode)
+    if (V.currentMode() === 'device') { pass = await askBackupPassphrase(); if (pass === null) return; }
+    download(`second-brain-backup-${today()}.json`, 'application/json', await V.exportBackup(pass));
+    toast(V.currentMode() === 'device' && !pass ? 'Backup downloaded. It is a plain, readable file.' : 'Encrypted backup downloaded.');
   }
   function mergeEntries(incoming) {
     const have = getEntries(), ids = new Set(have.map((e) => e.id));
@@ -585,9 +601,32 @@
   // ====================== VAULT (set up, lock, unlock) ======================
   let resumeHash = '';
 
+  let booting = null; // one boot at a time, so the vault is never created twice
   function boot() {
+    if (!booting) booting = doBoot().finally(() => { booting = null; });
+    return booting;
+  }
+  async function doBoot() {
     if (!V.supported) return unsupportedView();
-    return V.exists() ? lockView() : setupView();
+    if (!V.exists()) { // first launch: no password, just start (an older plaintext copy is moved into the vault)
+      try { await V.createDevice(V.legacy() || undefined); return route(); } catch (e) { return setupView(); }
+    }
+    if (V.storedMode() === 'device') {
+      try { await V.unlockDevice(); return route(); } catch (e) { return keyMissingView(); }
+    }
+    return lockView();
+  }
+
+  function keyMissingView() {
+    shell({ top: logo(), focus: true });
+    view(h('div', { class: 'lockwrap' },
+      h('div', { class: 'badge lockbadge' }, svg('lock')),
+      h('h1', { class: 'h-lg' }, 'Your entries cannot be opened'),
+      h('p', { class: 'lead' }, 'This browser no longer has the key that protects them, which usually means its site data was cleared or the app was reinstalled. Without the key the entries are unreadable.'),
+      h('p', { class: 'sub', style: 'margin-top:.75rem' }, 'If you have a backup, start fresh and restore it from More → Restore a backup. Your exported .md and .zip files are not affected.'),
+      h('button', { class: 'btn danger block', style: 'margin-top:1.25rem', onclick: async () => {
+        if (confirm('Start fresh? The unreadable entries on this device will be deleted.')) { await V.erase(); location.hash = '#/'; boot(); }
+      } }, 'Start fresh on this device')));
   }
 
   function unsupportedView() {
@@ -596,8 +635,8 @@
       h('p', null, 'Second Brain needs a secure connection (https) and a current browser so it can keep your entries private. Open it from its normal address in an up-to-date browser.')));
   }
 
-  function passField(label, autocomplete, onInput) {
-    const input = h('input', { type: 'password', autocomplete, required: true, 'aria-label': label, oninput: onInput });
+  function passField(label, autocomplete, onInput, optional) {
+    const input = h('input', { type: 'password', autocomplete, required: !optional, 'aria-label': label, oninput: onInput });
     const tog = h('button', { type: 'button', class: 'btn ghost sm', 'aria-pressed': 'false', onclick: () => {
       const show = input.type === 'password'; input.type = show ? 'text' : 'password'; tog.textContent = show ? 'Hide' : 'Show'; tog.setAttribute('aria-pressed', String(show)); } }, 'Show');
     return { input, el: h('label', { class: 'field' }, label, h('div', { class: 'pass' }, input, tog)) };
@@ -647,7 +686,7 @@
     view(h('div', { class: 'lockwrap' },
       h('div', { class: 'badge lockbadge' }, svg('shield')),
       h('h1', { class: 'h-lg' }, 'Protect your notebook'),
-      h('p', { class: 'lead' }, 'Your entries are encrypted on this device with a passphrase that only you know. Without it, nobody can read them, not even this app.'),
+      h('p', { class: 'lead' }, 'This browser cannot keep an automatic key, so your entries need a passphrase that only you know. Without it, nobody can read them, not even this app.'),
       legacy && legacy.entries.length ? h('p', { class: 'banner' }, `Your ${plural(legacy.entries.length, 'existing entry', 'existing entries')} will be encrypted too.`) : null,
       form,
       h('div', { class: 'section' }, h('h2', null, 'Already have a backup?')),
@@ -682,12 +721,13 @@
           h('p', null, 'It cannot be recovered or reset, because nobody else has a key. If you have an encrypted backup, you will still need the passphrase it was made with.'),
           h('p', null, 'You can erase everything on this device and start fresh. If you exported your entries as .md or .zip files, those are still safe.'),
           h('button', { class: 'btn danger sm', style: 'margin-top:.75rem', onclick: () => {
-            if (confirm('Erase ALL entries on this device? This cannot be undone.') && confirm('Really erase everything and start over?')) { V.erase(); resumeHash = ''; location.hash = '#/'; setupView(); }
+            if (confirm('Erase ALL entries on this device? This cannot be undone.') && confirm('Really erase everything and start over?')) { V.erase().then(() => { resumeHash = ''; location.hash = '#/'; boot(); }); }
           } }, 'Erase everything on this device')))));
     pf.input.focus();
   }
 
   async function lockNow() {
+    if (V.currentMode() !== 'pass') return;
     resumeHash = location.hash;
     await V.lock();
     session = null;
@@ -696,19 +736,47 @@
   }
 
   function changePassView() {
-    shell({ top: [backBtn('#/more', 'Back'), title('Change passphrase')], tab: 'more' });
-    const cur = passField('Current passphrase', 'current-password');
-    const fresh = newPassFields('New passphrase', 'Type the new one again');
-    const go = h('button', { class: 'btn block', type: 'submit', style: 'margin-top:1.25rem' }, 'Change passphrase');
-    view(h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'Change passphrase'),
-      h('p', { class: 'lead' }, 'Everything is re-encrypted with the new passphrase. Older encrypted backups still need the passphrase they were made with.'),
+    const adding = V.currentMode() === 'device';
+    const heading = adding ? 'Add a passphrase lock' : 'Change passphrase';
+    shell({ top: [backBtn('#/more', 'Back'), title(heading)], tab: 'more' });
+    const cur = adding ? null : passField('Current passphrase', 'current-password');
+    const fresh = newPassFields(adding ? 'Choose a passphrase' : 'New passphrase', adding ? 'Type it again' : 'Type the new one again');
+    const ack = adding ? h('input', { type: 'checkbox', id: 'ack', required: true }) : null;
+    const go = h('button', { class: 'btn block', type: 'submit', style: 'margin-top:1.25rem' }, adding ? 'Turn on passphrase lock' : 'Change passphrase');
+    view(h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, heading),
+      h('p', { class: 'lead' }, adding
+        ? 'The app will ask for this passphrase each time it opens, and lock itself after 2 minutes in the background. You can remove the lock later.'
+        : 'Everything is re-encrypted with the new passphrase. Older encrypted backups still need the passphrase they were made with.'),
       h('form', { onsubmit: async (ev) => {
         ev.preventDefault();
         const pass = fresh.valid(); if (!pass) return;
-        go.disabled = true; go.textContent = 'Re-encrypting...';
-        try { await V.changePassphrase(cur.input.value, pass); toast('Passphrase changed.'); location.hash = '#/more'; }
-        catch (e) { go.disabled = false; go.textContent = 'Change passphrase'; toast('The current passphrase did not work.'); cur.input.focus(); }
-      } }, cur.el, fresh.nodes, go));
+        go.disabled = true; go.textContent = 'Encrypting...';
+        try {
+          if (adding) await V.toPassphrase(pass); else await V.changePassphrase(cur.input.value, pass);
+          toast(adding ? 'Passphrase lock is on.' : 'Passphrase changed.'); location.hash = '#/more'; if (adding) moreView();
+        } catch (e) { go.disabled = false; go.textContent = adding ? 'Turn on passphrase lock' : 'Change passphrase'; toast(adding ? 'Could not turn on the lock.' : 'The current passphrase did not work.'); if (cur) cur.input.focus(); }
+      } }, cur ? cur.el : null, fresh.nodes,
+      adding ? h('label', { class: 'check' }, ack, h('span', null, 'I understand that if I forget this passphrase, my entries cannot be recovered by anyone.')) : null, go));
+  }
+
+  async function removeLock() {
+    const pass = await askPassphrase('Enter your passphrase to remove the lock. Your entries stay encrypted on this device, with a key the browser keeps, and the app will open without a password.');
+    if (pass == null) return;
+    try { await V.toDevice(pass); toast('Passphrase lock removed.'); moreView(); }
+    catch (e) { toast('That passphrase did not work.'); }
+  }
+
+  // Modal asking for an optional passphrase to protect a backup. Resolves '' for none, null if cancelled.
+  function askBackupPassphrase() {
+    return new Promise((resolve) => {
+      const pf = passField('Backup passphrase (optional)', 'new-password', null, true);
+      const done = (v) => { overlay.remove(); resolve(v); };
+      const overlay = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Protect the backup' },
+        h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); done(pf.input.value); } },
+          h('p', null, 'Protect this backup with a passphrase? Leave it empty for a plain, readable file that anyone who has it can open.'), pf.el,
+          h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit' }, 'Download'), h('button', { class: 'btn ghost', type: 'button', onclick: () => done(null) }, 'Cancel'))));
+      document.body.append(overlay); pf.input.focus();
+    });
   }
 
   // A small modal to ask for one passphrase. Resolves with the text, or null if cancelled.
@@ -728,7 +796,7 @@
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); V.flush(); }
-    else if (V.unlocked && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) lockNow();
+    else if (V.unlocked && V.currentMode() === 'pass' && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) lockNow();
   });
   window.addEventListener('pagehide', () => { V.flush(); });
 

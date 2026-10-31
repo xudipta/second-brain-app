@@ -202,3 +202,6 @@ body.focus #toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
 .error { color: var(--danger); min-height: 1.4em; margin-top: .5rem; font-weight: 600; font-size: .9rem; }
 .modal { position: fixed; inset: 0; z-index: 30; background: rgba(10, 10, 25, .55); display: grid; place-items: center; padding: 16px; }
 .sheet { width: 100%; max-width: 26rem; background: var(--surface); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); }
+
+.lockico { width: 40px; height: 40px; border-radius: 12px; background: var(--surface); color: var(--brand); display: grid; place-items: center; flex: none; }
+.lockico svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
