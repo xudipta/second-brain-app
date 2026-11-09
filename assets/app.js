@@ -1,5 +1,5 @@
-/* Second Brain capture app.
-   Asks the questions from templates.js one at a time and stores the answers exactly as typed.
+/* Second Brain: a daily to-do list that carries unfinished tasks forward, and a notebook that asks the questions
+   from templates.js one at a time and stores the answers exactly as typed.
    It never writes, suggests or rewrites anything. Entries live in this browser, encrypted with a device
    key (see vault.js; the owner can add a passphrase lock), and leave only when you download, copy or share them. */
 (function () {
@@ -13,11 +13,6 @@
 
   // ---------- icons (static strings only) ----------
   const ICON = {
-    idea: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/>',
-    learning: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5V5.5M9 8h7M9 12h5"/>',
-    session: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/>',
-    journal: '<path d="M5 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5zM9 3v18M12.5 8h4M12.5 12h4"/>',
-    habit: '<path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     back: '<path d="M15 5l-7 7 7 7"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
@@ -31,7 +26,10 @@
     phone: '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
     notebook: '<path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h5M10 12h5"/>',
     chevron: '<path d="M9 5l7 7-7 7"/>',
-    plus: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    arrowup: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    review: '<path d="M5 20V11M12 20V5M19 20v-6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/>',
     key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/>',
     shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'
@@ -77,7 +75,6 @@
   }
   const stripOptional = (q) => q.replace(/\s*\(optional\)$/, '');
   const typeClass = (type) => 't-' + type;
-  const badge = (type) => h('div', { class: `badge ${typeClass(type)}` }, svg(type));
 
   let toastTimer;
   function toast(msg, action) {
@@ -96,14 +93,15 @@
     app.classList.toggle('no-tabs', !!focus);
     tabs.querySelectorAll('a').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
   }
-  const logo = () => h('span', { class: 'logo' }, h('i', null, svg('notebook')), 'Second Brain');
+  const logo = () => h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain');
   const title = (t) => h('div', { class: 'title' }, t);
   const backBtn = (href, label) => h('a', { class: 'icon-btn', href, 'aria-label': label || 'Back' }, svg('back'));
   function view(...nodes) {
-    // fixed bars live outside the animated wrapper, or the animation's transform would trap them
-    const flat = nodes.flat(Infinity).filter(Boolean), bars = flat.filter((n) => n.classList && n.classList.contains('actionbar'));
-    app.replaceChildren(h('div', { class: 'view' }, flat.filter((n) => !bars.includes(n))), ...bars);
-    window.scrollTo(0, 0);
+    // sticky bars live outside the animated wrapper, so the wrapper's animation can never trap them
+    const flat = nodes.flat(Infinity).filter(Boolean), isBar = (n) => n.classList && (n.classList.contains('actionbar') || n.classList.contains('addbar'));
+    const bars = flat.filter(isBar);
+    app.replaceChildren(h('div', { class: 'view' + (quiet ? ' quiet' : '') }, flat.filter((n) => !isBar(n))), ...bars);
+    if (!quiet) window.scrollTo(0, 0);
   }
 
   // ---------- markdown (same format as second-brain/entries) ----------
@@ -198,51 +196,225 @@
 
   // ====================== VIEWS ======================
 
-  function homeView() {
-    shell({ top: logo(), tab: 'capture' });
+  // ====================== TO-DOS ======================
+  const Tk = window.Tasks;
+  const getTasks = () => { if (!V.state) return []; return V.state.tasks || (V.state.tasks = []); };
+  const saveTasks = () => V.touch(0);
+  let shownDay = today();            // the day the screen was drawn for; used to redraw after midnight
+  const addState = { text: '', tomorrow: false };
+  const shortDay = (s) => { try { return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(parseDate(s)); } catch (e) { return s; } };
+  const longDay = (s) => { try { return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long', year: s.slice(0, 4) === today().slice(0, 4) ? undefined : 'numeric' }).format(parseDate(s)); } catch (e) { return s; } };
+  const weekday = (s) => { try { return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(parseDate(s)); } catch (e) { return ''; } };
+  const firstLine = (s) => (s || '').split('\n')[0].trim();
+
+  function taskMeta(t, t0) {
+    const bits = [];
+    if (t.done) { if (t.plan0 < t.doneDate) bits.push(h('span', { class: 'age' }, `From ${shortDay(t.plan0)}`)); }
+    else if (t.plan > t0) bits.push(h('span', null, `Planned ${dayLabel(t.plan)}`));
+    else if (t.plan0 < t0) bits.push(h('span', { class: 'age' }, `From ${shortDay(t.plan0)} · ${plural(Tk.carriedDays(t, t0), 'day')}`));
+    if (t.note) bits.push(h('span', null, firstLine(t.note)));
+    return bits.length ? h('div', { class: 'meta' }, bits) : null;
+  }
+
+  // Redraw the Today screen without jumping to the top or replaying the entrance animation.
+  function redrawToday() { const y = window.scrollY; quiet = true; todayView(); quiet = false; window.scrollTo(0, y); }
+  let quiet = false;
+
+  function taskRow(t, t0) {
+    const toggle = () => { if (t.done) Tk.reopen(t); else Tk.complete(t, today(), Date.now()); saveTasks(); redrawToday(); };
+    const carried = !t.done && t.plan < t0;
+    return h('li', { class: 'task' + (t.done ? ' done' : '') },
+      h('button', { class: 'cb', role: 'checkbox', 'aria-checked': String(!!t.done), 'aria-label': (t.done ? 'Mark not done: ' : 'Mark done: ') + t.title, onclick: toggle }, svg('check')),
+      h('button', { class: 'body', onclick: () => taskSheet(t, redrawToday), 'aria-label': 'Edit task: ' + t.title }, h('div', { class: 'ttl' }, t.title), taskMeta(t, t0)),
+      carried ? h('button', { class: 'link-btn', onclick: () => { Tk.doToday(t, today()); saveTasks(); redrawToday(); } }, 'Do today') : null);
+  }
+
+  function todayView() {
+    shownDay = today();
+    const t0 = shownDay, tasks = getTasks(), v = Tk.today(tasks, t0);
     const draft = getDraft();
-    const entries = getEntries().slice().sort((a, b) => b.created - a.created);
     let installDismissed = false; try { installDismissed = sessionStorage.getItem('sb.noinstall') === '1'; } catch (e) { /* ignore */ }
+    const openCount = v.carried.length + v.planned.length, doneCount = v.done.length, total = openCount + doneCount;
+
+    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain'), h('span', { class: 'spacer' }), total ? h('a', { class: 'link-btn', href: '#/close' }, 'Close the day') : null], tab: 'today' });
+
+    const input = h('input', { type: 'text', placeholder: 'Add a task', maxlength: 300, 'aria-label': 'New task', autocomplete: 'off', enterkeyhint: 'done', value: addState.text, oninput: (e) => { addState.text = e.target.value; } });
+    const when = h('button', { type: 'button', class: 'when', 'aria-pressed': String(addState.tomorrow), 'aria-label': 'Plan for ' + (addState.tomorrow ? 'tomorrow' : 'today') + ' (tap to change)', onclick: () => { addState.tomorrow = !addState.tomorrow; when.textContent = addState.tomorrow ? 'Tomorrow' : 'Today'; when.setAttribute('aria-pressed', String(addState.tomorrow)); input.focus(); } }, addState.tomorrow ? 'Tomorrow' : 'Today');
+    const bar = h('form', { class: 'addbar', onsubmit: (ev) => {
+      ev.preventDefault();
+      const text = input.value.trim(); if (!text) return;
+      tasks.push(Tk.make(text, addState.tomorrow ? Tk.addDays(t0, 1) : t0, t0, Date.now()));
+      addState.text = ''; saveTasks(); redrawToday();
+      const next = document.querySelector('.addbar input'); if (next) next.focus();
+    } }, h('div', { class: 'field-wrap' }, input, when), h('button', { class: 'btn go', type: 'submit', 'aria-label': 'Add task' }, svg('arrowup')));
+
+    const list = (arr) => h('ul', { class: 'tasks' }, arr.map((t) => taskRow(t, t0)));
+    const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
     view(
-      h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'What do you want to capture?'),
-      h('p', { class: 'lead' }, 'Pick a type. You will be asked one question at a time, and your words are kept exactly as you write them.'),
+      h('div', { class: 'today-head' },
+        h('div', null, h('div', { class: 'eyebrow' }, weekday(t0)), h('h1', { class: 'page-title' }, longDay(t0))),
+        total ? h('div', { class: 'right progress-text' }, h('b', null, doneCount), ` of ${total} done`) : null),
+      total ? h('div', { class: 'meter', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': doneCount, 'aria-label': 'Tasks done today' }, h('i', { style: `width:${pct}%` })) : null,
 
       draft && T[draft.type] ? h('div', { class: `banner ${typeClass(draft.type)}` },
-        badge(draft.type),
-        h('div', { class: 'grow' }, h('strong', null, `Unfinished ${T[draft.type].label.toLowerCase()}`), h('span', { class: 'sub' }, `Question ${draft.idx + 1} of ${T[draft.type].questions.length}`)),
+        h('div', { class: 'grow' }, h('strong', null, `Unfinished ${T[draft.type].label.toLowerCase()} note`), h('span', { class: 'sub' }, `Question ${draft.idx + 1} of ${T[draft.type].questions.length}`)),
         h('a', { class: 'btn sm', href: `#/new/${draft.type}` }, 'Continue'),
         h('button', { class: 'icon-btn', 'aria-label': 'Discard draft', onclick: () => discardDraft() }, svg('trash'))) : null,
-
       deferredInstall && !installDismissed && !installed() ? h('div', { class: 'banner' },
         h('div', { class: 'grow' }, h('strong', null, 'Install Second Brain'), h('span', { class: 'sub' }, 'Open it like an app, even offline.')),
         h('button', { class: 'btn sm', onclick: askInstall }, 'Install'),
-        h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { try { sessionStorage.setItem('sb.noinstall', '1'); } catch (e) { /* ignore */ } homeView(); } }, svg('close'))) : null,
-
+        h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { try { sessionStorage.setItem('sb.noinstall', '1'); } catch (e) { /* ignore */ } todayView(); } }, svg('close'))) : null,
+      v.carried.length ? [h('div', { class: 'section' }, h('h2', null, 'Carried over'), h('span', { class: 'count-chip' }, v.carried.length)), list(v.carried)] : null,
+      h('div', { class: 'section' }, h('h2', null, 'Today'), h('span', { class: 'count-chip' }, v.planned.length || '')),
+      v.planned.length ? list(v.planned) : h('p', { class: 'empty-line' }, total ? (openCount ? 'Nothing else planned for today.' : 'Everything planned is done.') : 'Nothing planned yet. Add your first task below. Whatever you do not finish carries over to the next day.'),
+      v.later.length ? h('details', { class: 'fold' }, h('summary', null, h('h2', null, 'Later'), h('span', { class: 'count-chip' }, v.later.length)), list(v.later)) : null,
+      v.done.length ? h('details', { class: 'fold', open: openCount === 0 ? true : null }, h('summary', null, h('h2', null, 'Done'), h('span', { class: 'count-chip' }, v.done.length)), list(v.done)) : null,
       V.currentMode() === 'device' && !V.state.tipDismissed ? h('div', { class: 'banner' },
-        h('div', { class: 'ico lockico' }, svg('lock')),
         h('div', { class: 'grow' }, h('strong', null, 'Add a passphrase lock?'), h('span', { class: 'sub' }, 'Optional. Worth it if others use this phone.')),
         h('a', { class: 'btn sm', href: '#/passphrase' }, 'Set up'),
-        h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { V.state.tipDismissed = true; V.touch(0); homeView(); } }, svg('close'))) : null,
-
-      h('div', { class: 'section' }, h('h2', null, 'Start a new entry')),
-      h('div', { class: 'types' }, Object.entries(T).map(([key, t]) =>
-        h('a', { class: `tile ${typeClass(key)}`, href: `#/new/${key}` },
-          badge(key), h('strong', null, t.label), h('span', null, t.blurb), h('small', null, plural(t.questions.filter((q) => q.kind !== 'tags').length, 'question'))))),
-
-      h('div', { class: 'section' }, h('h2', null, 'Recent'), entries.length ? h('a', { href: '#/entries' }, 'See all') : null),
-      entries.length ? entries.slice(0, 3).map(entryRow) : emptyState('Nothing captured yet', 'Your first entry will show up here.')
-    );
+        h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { V.state.tipDismissed = true; V.touch(0); todayView(); } }, svg('close'))) : null,
+      bar);
   }
 
+  // A sheet for one task: edit the words, or move it. Words are kept exactly as typed.
+  function taskSheet(t, after) {
+    const t0 = today();
+    const title = h('input', { type: 'text', value: t.title, maxlength: 300 });
+    const note = h('textarea', { placeholder: 'Optional', maxlength: 2000 }, t.note || '');
+    const date = h('input', { type: 'date', min: Tk.addDays(t0, 1), 'aria-label': 'Move to date' });
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+    const commit = (fn) => { const w = title.value.trim(); if (w) t.title = w; t.note = note.value.trim(); fn && fn(); saveTasks(); close(); after && after(); };
+    const open = Tk.isOpen(t);
+    const acts = [];
+    if (open && t.plan !== t0) acts.push(h('button', { class: 'btn secondary', type: 'button', onclick: () => commit(() => Tk.doToday(t, t0)) }, 'Do today'));
+    if (open && t.plan !== Tk.addDays(t0, 1)) acts.push(h('button', { class: 'btn secondary', type: 'button', onclick: () => commit(() => Tk.moveTo(t, Tk.addDays(t0, 1), t0)) }, 'Tomorrow'));
+    if (t.done) acts.push(h('button', { class: 'btn secondary', type: 'button', onclick: () => commit(() => Tk.reopen(t)) }, 'Mark not done'));
+    if (t.dropped) acts.push(h('button', { class: 'btn secondary', type: 'button', onclick: () => commit(() => Tk.restore(t)) }, 'Restore'));
+    if (open) acts.push(h('button', { class: 'btn secondary', type: 'button', onclick: () => commit(() => Tk.drop(t, t0, Date.now())) }, 'Drop'));
+    acts.push(h('button', { class: 'btn danger', type: 'button', onclick: () => {
+      const list = getTasks(), i = list.indexOf(t); list.splice(i, 1); saveTasks(); close(); after && after();
+      toast('Task deleted.', { label: 'Undo', run: () => { list.splice(Math.min(i, list.length), 0, t); saveTasks(); after && after(); } });
+    } }, 'Delete'));
+    const overlay = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Task', onclick: (ev) => { if (ev.target === overlay) close(); } },
+      h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); commit(); } },
+        h('h3', null, 'Edit task'),
+        h('label', { class: 'field', style: 'margin-top:0' }, 'Title', title), h('label', { class: 'field' }, 'Note', note),
+        open ? h('div', { class: 'field' }, 'Move to a date', h('div', { class: 'pass' }, date, h('button', { class: 'btn secondary', type: 'button', onclick: () => { if (date.value && date.value > t0) commit(() => Tk.moveTo(t, date.value, t0)); else toast('Pick a day after today.'); } }, 'Move'))) : null,
+        h('div', { class: 'acts' }, acts),
+        h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'Cancel'))));
+    document.addEventListener('keydown', onKey);
+    document.body.append(overlay); title.focus();
+  }
+
+  // --- close the day ---
+  function closeView() {
+    const t0 = today(), v = Tk.today(getTasks(), t0), left = v.carried.concat(v.planned);
+    shell({ top: [backBtn('#/', 'Back to Today'), h('div', { class: 'title' }, 'Close the day')], tab: 'today' });
+    view(
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, `${weekday(t0)} ${longDay(t0)}`),
+      h('h1', { class: 'page-title' }, 'How did today go?'),
+      h('div', { class: 'stats', style: 'margin-top:1.25rem;grid-template-columns:repeat(2,1fr)' },
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, v.done.length), h('div', { class: 'l' }, 'Done')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, left.length), h('div', { class: 'l' }, 'Still open'))),
+      left.length ? [
+        h('div', { class: 'section' }, h('h2', null, 'Still open'), h('span', { class: 'count-chip' }, left.length)),
+        h('p', { class: 'sub', style: 'margin:.4rem 0' }, 'These carry over to tomorrow on their own. Drop anything you no longer want to do.'),
+        h('ul', { class: 'tasks' }, left.map((t) => h('li', { class: 'task' },
+          h('div', { class: 'body', style: 'cursor:default' }, h('div', { class: 'ttl' }, t.title), taskMeta(t, t0)),
+          h('button', { class: 'link-btn', onclick: () => { Tk.drop(t, t0, Date.now()); saveTasks(); closeView(); } }, 'Drop'))))] : h('p', { class: 'empty-line' }, total0(v) ? 'Nothing left open. Nicely done.' : 'No tasks today.'),
+      v.done.length ? [h('div', { class: 'section' }, h('h2', null, 'Done today'), h('span', { class: 'count-chip' }, v.done.length)), h('ul', { class: 'tasks' }, v.done.map((t) => h('li', { class: 'task done' }, h('div', { class: 'cb', role: 'img', 'aria-label': 'Done', 'aria-checked': 'true' }, svg('check')), h('div', { class: 'body', style: 'cursor:default' }, h('div', { class: 'ttl' }, t.title), taskMeta(t, t0)))))] : null,
+      h('div', { class: 'btn-row', style: 'margin-top:2rem' },
+        h('a', { class: 'btn', href: '#/' }, 'Done for today'),
+        h('a', { class: 'btn secondary', href: '#/new/journal' }, 'Reflect in your journal')));
+  }
+  const total0 = (v) => v.done.length + v.carried.length + v.planned.length;
+
+  // --- review ---
+  let reviewMore = 1; // pages of 30 days shown
+  function barChart(per, t0) {
+    const days = per.slice().reverse(); // oldest first
+    const max = Math.max(1, ...days.map((p) => p.done.length + p.left.length));
+    const W = 336, H = 150, base = 120, top = 8, bw = 30, gap = (W - bw * days.length) / (days.length + 1), scale = (base - top) / max, r = 3;
+    const parts = [];
+    days.forEach((p, i) => {
+      const x = gap + i * (bw + gap), d = p.done.length, l = p.left.length;
+      const hd = d * scale, hl = l * scale;
+      const tip = `${shortDay(p.date)}: ${d} done, ${l} left over`;
+      parts.push(`<g><title>${tip}</title>`);
+      if (d) parts.push(`<rect class="done" x="${x}" y="${base - hd}" width="${bw}" height="${hd}" rx="${r}"/>`);
+      if (l) parts.push(`<rect class="left" x="${x}" y="${base - hd - hl - (d ? 2 : 0)}" width="${bw}" height="${hl}" rx="${r}"/>`);
+      if (!d && !l) parts.push(`<rect class="left" x="${x}" y="${base - 2}" width="${bw}" height="2" rx="1"/>`);
+      parts.push(`<text x="${x + bw / 2}" y="${H - 14}" text-anchor="middle">${new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(parseDate(p.date)).slice(0, 3)}</text>`);
+      if (p.date === t0) parts.push(`<rect class="today-mark" x="${x + bw / 2 - 8}" y="${H - 6}" width="16" height="2" rx="1"/>`);
+      parts.push('</g>');
+    });
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<svg class="bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="Tasks done and left over each day for the last 7 days; a table follows">${parts.join('')}</svg>`;
+    return wrap.firstChild;
+  }
+  function reviewTab() {
+    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
+    const t0 = today(), tasks = getTasks();
+    if (!tasks.length) {
+      view(h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Review'), h('h1', { class: 'page-title' }, 'Your days'),
+        h('div', { class: 'empty' }, svg('review'), h('h3', null, 'Nothing to review yet'), h('p', null, 'Add tasks on Today. Each day will show up here with what you finished and what carried over.'), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
+      return;
+    }
+    const week = Tk.days(Tk.addDays(t0, -6), t0), r = Tk.range(tasks, week, t0);
+    const first = Tk.firstDay(tasks) || t0, all = Tk.days(first, t0).map((d) => Tk.day(tasks, d)).filter((p) => p.done.length || p.left.length || p.dropped.length || p.added.length);
+    const shown = all.slice(0, 30 * reviewMore);
+    view(
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Last 7 days'), h('h1', { class: 'page-title' }, 'Your days'),
+      h('div', { class: 'stats', style: 'margin-top:1.25rem' },
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, r.done), h('div', { class: 'l' }, 'Tasks finished')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, r.rate == null ? '–' : Math.round(r.rate * 100) + '%'), h('div', { class: 'l' }, 'Of the tasks on your list')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, `${r.activeDays}/7`), h('div', { class: 'l' }, 'Days with something done')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, r.oldest ? plural(r.oldestDays, 'day') : '–'), h('div', { class: 'l' }, r.oldest ? `Longest open: ${r.oldest.title.length > 28 ? r.oldest.title.slice(0, 27) + '…' : r.oldest.title}` : 'Nothing open from earlier'))),
+      barChart(r.per, t0),
+      h('div', { class: 'legend' }, h('span', null, h('i', { style: 'background:var(--accent)' }), 'Done'), h('span', null, h('i', { style: 'background:var(--line-strong)' }), 'Left over')),
+      h('table', { class: 'sr-only' }, h('caption', null, 'Tasks per day, last 7 days'), h('thead', null, h('tr', null, h('th', null, 'Day'), h('th', null, 'Done'), h('th', null, 'Left over'))),
+        h('tbody', null, r.per.slice().reverse().map((p) => h('tr', null, h('td', null, p.date), h('td', null, p.done.length), h('td', null, p.left.length))))),
+      h('div', { class: 'section' }, h('h2', null, 'Days'), h('span', { class: 'count-chip' }, all.length)),
+      shown.map((p) => h('a', { class: 'dayrow', href: `#/review/${p.date}` },
+        h('span', { class: 'd' }, dayLabel(p.date)),
+        h('span', { class: 's' }, [`${p.done.length} done`, p.left.length ? `${p.left.length} left` : null, p.dropped.length ? `${p.dropped.length} dropped` : null].filter(Boolean).join(' · ')),
+        h('span', { class: 'bar' }, h('i', { style: `width:${p.rate == null ? 0 : Math.round(p.rate * 100)}%` })))),
+      all.length > shown.length ? h('button', { class: 'btn secondary block', style: 'margin-top:1rem', onclick: () => { reviewMore++; reviewTab(); } }, 'Show older days') : null);
+  }
+
+  function dayDetailView(d) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) { location.hash = '#/review'; return; }
+    shell({ top: [backBtn('#/review', 'Back to review'), h('div', { class: 'title' }, dayLabel(d))], tab: 'review' });
+    const t0 = today(), p = Tk.day(getTasks(), d), notes = getEntries().filter((e) => e.date === d);
+    const ro = (arr, mark) => h('ul', { class: 'tasks' }, arr.map((t) => h('li', { class: 'task' + (mark === 'done' ? ' done' : '') },
+      mark === 'done' ? h('div', { class: 'cb', role: 'img', 'aria-label': 'Done', 'aria-checked': 'true' }, svg('check')) : h('div', { class: 'cb', 'aria-hidden': 'true', style: 'opacity:.45' }),
+      h('div', { class: 'body', style: 'cursor:default' }, h('div', { class: 'ttl' }, t.title),
+        h('div', { class: 'meta' }, t.plan0 < d ? h('span', { class: 'age' }, `From ${shortDay(t.plan0)} · ${plural(Tk.diffDays(d, t.plan0), 'day')}`) : null, t.note ? h('span', null, firstLine(t.note)) : null)))));
+    const sec = (name, arr, mark) => (arr.length ? [h('div', { class: 'section' }, h('h2', null, name), h('span', { class: 'count-chip' }, arr.length)), ro(arr, mark)] : null);
+    view(
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, weekday(d)), h('h1', { class: 'page-title' }, longDay(d)),
+      h('div', { class: 'stats', style: 'margin-top:1.25rem' },
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, p.done.length), h('div', { class: 'l' }, 'Done')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, p.left.length), h('div', { class: 'l' }, 'Left over')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, p.added.length), h('div', { class: 'l' }, 'Added')),
+        h('div', { class: 'stat' }, h('div', { class: 'n' }, p.rate == null ? '–' : Math.round(p.rate * 100) + '%'), h('div', { class: 'l' }, 'Completed'))),
+      sec('Done', p.done, 'done'), sec('Left over', p.left, 'left'), sec('Dropped', p.dropped, 'dropped'),
+      notes.length ? [h('div', { class: 'section' }, h('h2', null, 'Notes that day'), h('span', { class: 'count-chip' }, notes.length)), notes.map(entryRow)] : null,
+      !p.done.length && !p.left.length && !p.dropped.length && !notes.length ? h('p', { class: 'empty-line' }, 'Nothing was on the list that day.') : null,
+      d < t0 && p.left.length ? h('p', { class: 'sub', style: 'margin-top:1rem' }, 'Anything still open now is on the Today screen, under Carried over.') : null);
+  }
+
+  // ====================== NOTES ======================
   function discardDraft() {
     const draft = getDraft(); if (!draft) return;
-    setDraft(null); homeView();
-    toast('Draft discarded.', { label: 'Undo', run: () => { setDraft(draft); if (!location.hash || location.hash === '#/') homeView(); } });
+    setDraft(null); route();
+    toast('Draft discarded.', { label: 'Undo', run: () => { setDraft(draft); route(); } });
   }
 
-  function emptyState(head, text) {
-    return h('div', { class: 'empty' }, h('div', { class: 'badge' }, svg('notebook')), h('h3', null, head), h('p', null, text));
+  function emptyState(head, text, icon) {
+    return h('div', { class: 'empty' }, svg(icon || 'notebook'), h('h3', null, head), h('p', null, text));
   }
 
   function excerpt(e) {
@@ -251,26 +423,35 @@
   }
   function entryRow(e) {
     return h('a', { class: `entry ${typeClass(e.type)}`, href: `#/entry/${e.id}` },
-      badge(e.type),
-      h('div', { class: 'body' },
-        h('div', { class: 'ttl' }, e.title || (T[e.type] ? T[e.type].label : e.type) + ' · ' + dayLabel(e.date)),
-        h('div', { class: 'ex' }, excerpt(e)),
-        h('div', { class: 'meta' }, h('span', null, dayLabel(e.date)), e.duration ? h('span', null, e.duration) : null,
-          e.exportedAt ? null : h('span', { class: 'pending', title: 'Not exported yet' }), e.exportedAt ? null : h('span', null, 'Not exported'))));
+      h('span', { class: 'tlabel' }, T[e.type] ? T[e.type].label : e.type),
+      h('div', { class: 'ttl' }, e.title || (T[e.type] ? T[e.type].label : e.type) + ' · ' + dayLabel(e.date)),
+      h('div', { class: 'ex' }, excerpt(e)),
+      h('div', { class: 'meta' }, h('span', null, dayLabel(e.date)), e.duration ? h('span', null, e.duration) : null,
+        e.exportedAt ? null : h('span', { class: 'pending', title: 'Not exported yet' }), e.exportedAt ? null : h('span', null, 'Not exported')));
   }
 
-  // --- entries ---
+  // The type picker: a plain list, not a grid of tiles.
+  function newView() {
+    shell({ top: [backBtn('#/notes', 'Back to notes'), h('div', { class: 'title' }, 'New note')], tab: 'notes' });
+    view(h('h1', { class: 'page-title', style: 'margin-top:.5rem' }, 'What kind of note?'),
+      h('p', { class: 'lead' }, 'You will be asked one question at a time, and your words are kept exactly as you write them.'),
+      Object.entries(T).map(([key, t]) => h('a', { class: `typerow ${typeClass(key)}`, href: `#/new/${key}` },
+        h('h3', null, t.label), h('p', null, t.blurb),
+        h('small', null, `${plural(t.questions.filter((q) => q.kind !== 'tags').length, 'question')} · based on ${t.frameworks.split(/[,(]/)[0].trim()}`))),
+      h('p', { class: 'sub', style: 'margin-top:1.25rem' }, h('a', { href: '#/about' }, 'Why these questions?')));
+  }
+
   const filters = { q: '', type: 'all' };
-  function entriesView() {
-    shell({ top: title('Entries'), tab: 'entries' });
-    const all = getEntries();
+  function notesView() {
+    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain'), h('span', { class: 'spacer' }), h('a', { class: 'btn sm', href: '#/new' }, svg('plus'), 'New note')], tab: 'notes' });
+    const all = getEntries(), draft = getDraft();
     const list = h('div', { id: 'entry-list' });
     const draw = () => {
       const q = filters.q.trim().toLowerCase();
       const rows = all.filter((e) => (filters.type === 'all' || e.type === filters.type) &&
         (!q || [e.title, e.source, (e.tags || []).join(' '), e.qa.map((p) => p.a).join(' ')].join(' ').toLowerCase().includes(q)))
         .sort((a, b) => (a.date === b.date ? b.created - a.created : a.date < b.date ? 1 : -1));
-      if (!rows.length) { list.replaceChildren(all.length ? emptyState('No matches', 'Try a different word or type.') : emptyState('No entries yet', 'Capture something and it will appear here.')); return; }
+      if (!rows.length) { list.replaceChildren(all.length ? emptyState('No matches', 'Try a different word or type.', 'search') : emptyState('No notes yet', 'Capture an idea, something you learned, a work session, a journal entry or a habit check-in.')); return; }
       const out = []; let last = '';
       rows.forEach((e) => { if (e.date !== last) { out.push(h('div', { class: 'day' }, dayLabel(e.date))); last = e.date; } out.push(entryRow(e)); });
       list.replaceChildren(...out);
@@ -282,10 +463,15 @@
     drawChips();
 
     view(
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, all.length ? plural(all.length, 'note') : 'Notebook'), h('h1', { class: 'page-title' }, 'Notes'),
+      draft && T[draft.type] ? h('div', { class: `banner ${typeClass(draft.type)}` },
+        h('div', { class: 'grow' }, h('strong', null, `Unfinished ${T[draft.type].label.toLowerCase()}`), h('span', { class: 'sub' }, `Question ${draft.idx + 1} of ${T[draft.type].questions.length}`)),
+        h('a', { class: 'btn sm', href: `#/new/${draft.type}` }, 'Continue'),
+        h('button', { class: 'icon-btn', 'aria-label': 'Discard draft', onclick: () => discardDraft() }, svg('trash'))) : null,
       all.length ? h('div', { class: 'search' }, svg('search'),
-        h('input', { type: 'search', placeholder: 'Search your entries', 'aria-label': 'Search entries', value: filters.q, oninput: (ev) => { filters.q = ev.target.value; draw(); } })) : null,
+        h('input', { type: 'search', placeholder: 'Search your notes', 'aria-label': 'Search notes', value: filters.q, oninput: (ev) => { filters.q = ev.target.value; draw(); } })) : null,
       all.length ? chips : null,
-      pending ? h('p', { class: 'sub', style: 'margin-top:.5rem' }, `${plural(pending, 'entry', 'entries')} not exported yet. They exist only on this device until you export them. `, h('a', { href: '#/more' }, 'Export')) : null,
+      pending ? h('p', { class: 'sub', style: 'margin-top:.5rem' }, `${plural(pending, 'note')} not exported yet. They exist only on this device until you export them. `, h('a', { href: '#/more' }, 'Export')) : null,
       list);
     draw();
   }
@@ -293,8 +479,8 @@
   // --- entry detail ---
   function entryView(id) {
     const all = getEntries(), e = all.find((x) => x.id === id);
-    if (!e) { location.hash = '#/entries'; return; }
-    shell({ top: [backBtn('#/entries', 'Back to entries'), title(T[e.type] ? T[e.type].label : 'Entry')], tab: 'entries' });
+    if (!e) { location.hash = '#/notes'; return; }
+    shell({ top: [backBtn('#/notes', 'Back to notes'), title(T[e.type] ? T[e.type].label : 'Entry')], tab: 'notes' });
     const md = entryToMarkdown(e), path = entryPath(e, all), file = path.split('/').pop();
     const mkFile = () => new File([md], file, { type: 'text/markdown' });
     const canShare = !!(navigator.canShare && navigator.canShare({ files: [mkFile()] }));
@@ -312,7 +498,7 @@
 
     view(
       h('div', { class: `dhead ${typeClass(e.type)}` },
-        h('div', { class: 'metas' }, h('span', { class: 'meta-chip' }, dayLabel(e.date)), e.duration ? h('span', { class: 'meta-chip' }, e.duration) : null,
+        h('div', { class: 'metas' }, h('span', { class: 'tlabel' }, T[e.type] ? T[e.type].label : e.type), h('span', { class: 'meta-chip' }, dayLabel(e.date)), e.duration ? h('span', { class: 'meta-chip' }, e.duration) : null,
           e.source ? h('span', { class: 'meta-chip' }, e.source) : null, (e.tags || []).map((t) => h('span', { class: 'tag' }, '#' + t))),
         e.title ? h('h1', null, e.title) : null),
       h('p', { class: 'sub', style: 'margin-top:.6rem' }, e.exportedAt ? 'Exported. Still saved on this device.' : 'Saved on this device only. Export it to keep a copy.'),
@@ -329,26 +515,26 @@
 
   function deleteEntry(e) {
     setEntries(getEntries().filter((x) => x.id !== e.id));
-    location.hash = '#/entries';
-    toast('Entry deleted.', { label: 'Undo', run: () => { const l = getEntries(); l.push(e); setEntries(l); if (location.hash === '#/entries') entriesView(); } });
+    location.hash = '#/notes';
+    toast('Note deleted.', { label: 'Undo', run: () => { const l = getEntries(); l.push(e); setEntries(l); if (location.hash === '#/notes') notesView(); } });
   }
 
   // --- more ---
   function moreView() {
     shell({ top: title('More'), tab: 'more' });
-    const all = getEntries();
+    const all = getEntries(), tk = getTasks(), hasData = all.length || tk.length;
     const row = (icon, head, text, attrs) => h(attrs.href ? 'a' : 'button', Object.assign({ class: 'row-item' }, attrs),
       h('div', { class: 'ico' }, svg(icon)), h('div', { class: 'txt' }, h('strong', null, head), h('span', null, text)), svg('chevron'));
     view(
-      h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'More'),
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Settings'), h('h1', { class: 'page-title' }, 'More'),
       h('div', { class: 'section' }, h('h2', null, 'About')),
       h('div', { class: 'rows' }, row('info', 'Why these questions', 'Where each question comes from, and its limits', { href: '#/about' })),
       h('div', { class: 'section' }, h('h2', null, 'Your data')),
       h('div', { class: 'rows' },
-        row('download', 'Export all as .zip', all.length ? `${plural(all.length, 'entry', 'entries')}, in entries/YYYY/MM/ folders` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: all.length ? null : true }),
-        row('download', 'Backup (.json)', V.currentMode() === 'pass' ? 'Encrypted with your passphrase' : 'Optionally protected by its own passphrase', { onclick: backup, disabled: all.length ? null : true }),
+        row('download', 'Export all as .zip', hasData ? `${plural(all.length, 'note')} in entries/, daily to-dos in todos/` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: hasData ? null : true }),
+        row('download', 'Backup (.json)', V.currentMode() === 'pass' ? 'Encrypted with your passphrase' : 'Optionally protected by its own passphrase', { onclick: backup, disabled: hasData ? null : true }),
         h('label', { class: 'row-item', style: 'position:relative' },
-          h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds entries from a .json backup')),
+          h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds notes and to-dos from a .json backup')),
           h('input', { type: 'file', accept: 'application/json,.json', onchange: restore, style: 'position:absolute;inset:0;opacity:0;cursor:pointer', 'aria-label': 'Restore a backup file' }))),
       h('p', { class: 'sub', style: 'margin-top:.6rem' }, 'The .zip and .md exports are plain readable files, because they are meant for your second-brain repo. Treat them accordingly. Clearing browser data deletes your entries, so back up now and then.'),
       h('div', { class: 'section' }, h('h2', null, 'Security')),
@@ -379,10 +565,13 @@
   }
 
   function exportAll() {
-    const list = getEntries(); if (!list.length) return;
-    download(`second-brain-${today()}.zip`, 'application/zip', makeZip(list.map((e) => ({ name: entryPath(e, list), content: entryToMarkdown(e) }))));
+    const list = getEntries(), tk = getTasks(); if (!list.length && !tk.length) return;
+    const files = list.map((e) => ({ name: entryPath(e, list), content: entryToMarkdown(e) }));
+    let days = 0;
+    if (tk.length) Tk.days(Tk.firstDay(tk), today()).forEach((d) => { const md = Tk.dayMarkdown(tk, d); if (md) { files.push({ name: `todos/${d.slice(0, 4)}/${d.slice(5, 7)}/${d}.md`, content: md + '\n' }); days++; } });
+    download(`second-brain-${today()}.zip`, 'application/zip', makeZip(files));
     markExported(list.map((e) => e.id));
-    toast(`Exported ${plural(list.length, 'entry', 'entries')}.`);
+    toast(`Exported ${plural(list.length, 'note')} and ${plural(days, 'day')} of to-dos.`);
   }
   async function backup() {
     let pass; // undefined: use the vault's own key (passphrase mode)
@@ -390,26 +579,29 @@
     download(`second-brain-backup-${today()}.json`, 'application/json', await V.exportBackup(pass));
     toast(V.currentMode() === 'device' && !pass ? 'Backup downloaded. It is a plain, readable file.' : 'Encrypted backup downloaded.');
   }
-  function mergeEntries(incoming) {
+  function mergeData(data) {
     const have = getEntries(), ids = new Set(have.map((e) => e.id));
-    const add = incoming.filter((e) => e && e.id && T[e.type] && e.date && Array.isArray(e.qa) && !ids.has(e.id));
+    const add = (data.entries || []).filter((e) => e && e.id && T[e.type] && e.date && Array.isArray(e.qa) && !ids.has(e.id));
     setEntries(have.concat(add));
-    return add.length;
+    const tk = getTasks(), tids = new Set(tk.map((t) => t.id));
+    const addT = (data.tasks || []).map(Tk.normalize).filter((t) => t && !tids.has(t.id));
+    addT.forEach((t) => tk.push(t)); saveTasks();
+    return { notes: add.length, tasks: addT.length };
   }
   async function restore(ev) {
     const input = ev.target, file = input.files[0]; if (!file) return;
     try {
       const parsed = V.parseBackup(await file.text());
       let incoming;
-      if (parsed.plain) incoming = parsed.plain; // an old, unencrypted backup: it is encrypted as it joins the vault
+      if (parsed.plain) incoming = parsed.plain; // an unencrypted backup: it is encrypted as it joins the vault
       else if (V.sameKeyAs(parsed.file)) incoming = await V.openBackup(parsed.file);
       else {
         const pass = await askPassphrase('This backup was made with a different passphrase. Enter the passphrase it was made with.');
         if (pass == null) return;
         incoming = await V.openBackup(parsed.file, pass);
       }
-      const n = mergeEntries(incoming);
-      toast(`Restored ${plural(n, 'entry', 'entries')}.`); moreView();
+      const n = mergeData(incoming);
+      toast(`Restored ${plural(n.notes, 'note')} and ${plural(n.tasks, 'task')}.`); moreView();
     } catch (e) { toast('Could not restore: wrong passphrase or not a valid backup.'); }
     input.value = '';
   }
@@ -421,8 +613,8 @@
       h('h1', { class: 'h-lg', style: 'margin-top:.5rem' }, 'Why these questions'),
       h('p', { class: 'lead' }, 'Nothing here is made up. Every question traces to a published framework. The questions are plain-language adaptations of these works, not copies of any book\'s exact protocol.'),
       Object.entries(T).map(([key, t]) =>
-        h('div', { class: `card src-card ${typeClass(key)}`, id: 'src-' + key, style: 'margin-top:.9rem' },
-          h('h3', null, badge(key), t.label),
+        h('div', { class: `src-card ${typeClass(key)}`, id: 'src-' + key },
+          h('h3', null, t.label),
           h('p', { class: 'fw' }, 'Frameworks: ' + t.frameworks + '.'),
           h('ul', null, (window.SOURCES[key] || []).map((s) => h('li', null, s))))),
       h('div', { class: 'section' }, h('h2', null, 'Honest limits')),
@@ -436,7 +628,8 @@
   const persist = () => { if (session && !session.editId) setDraft(session); };
 
   function startOrResume(type) {
-    const t = T[type]; if (!t) { location.hash = '#/'; return; }
+    if (!type) return newView();
+    const t = T[type]; if (!t) { location.hash = '#/notes'; return; }
     const draft = getDraft();
     if (session && session.type === type && !session.editId) { return session.review ? reviewView() : interviewView(); }
     if (draft && draft.type === type) { session = draft; return session.review ? reviewView() : interviewView(); }
@@ -448,12 +641,12 @@
 
   function leave() {
     if (session && session.editId) { const id = session.editId; session = null; location.hash = `#/entry/${id}`; return; }
-    persist(); session = null; toast('Draft saved. Continue from the home screen.'); location.hash = '#/';
+    persist(); session = null; toast('Draft saved. Continue from Notes or Today.'); location.hash = '#/notes';
   }
 
   function habitChoiceView() {
     const t = T.habit;
-    shell({ top: [h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => { session = null; location.hash = '#/'; } }, svg('close')), title('Habit')], focus: true });
+    shell({ top: [h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => { session = null; location.hash = '#/notes'; } }, svg('close')), title('Habit')], focus: true });
     view(
       h('div', { class: `qwrap ${typeClass('habit')}` },
         h('div', { class: 'question' }, 'Was this habit set up in an earlier entry?'),
@@ -496,13 +689,13 @@
     shell({
       top: [h('button', { class: 'icon-btn', 'aria-label': review ? 'Back to review' : 'Close and save draft', onclick: () => (review ? (reviewView()) : leave()) }, svg(review ? 'back' : 'close')),
         h('div', { class: `progress ${typeClass(session.type)}`, role: 'progressbar', 'aria-valuemin': 1, 'aria-valuemax': total, 'aria-valuenow': session.idx + 1, 'aria-label': 'Progress' },
-          t.questions.map((_, i) => h('i', { class: i < session.idx ? 'done' : i === session.idx ? 'now' : '' }))),
+          h('i', { style: `width:${((session.idx + 1) / total) * 100}%` })),
         h('span', { class: 'count' }, `${session.idx + 1}/${total}`)],
       focus: true
     });
     view(
       h('div', { class: `qwrap ${typeClass(session.type)}` },
-        h('span', { class: 'qtype' }, svg(session.type), t.label),
+        h('span', { class: 'qtype' }, t.label),
         h('label', { class: 'question', for: 'ans' }, q.q),
         q.hint ? h('p', { class: 'hint', id: 'hint' }, q.hint) : null,
         input, isTags ? preview : null,
@@ -528,7 +721,7 @@
     const skippedAll = t.questions.every((q, i) => !(session.answers[i] || '').trim());
     view(
       h('div', { class: `qwrap ${typeClass(session.type)}` },
-        h('span', { class: 'qtype' }, svg(session.type), t.label),
+        h('span', { class: 'qtype' }, t.label),
         h('h1', { class: 'h-lg', style: 'margin:.75rem 0 .25rem' }, edit ? 'Edit your answers' : 'Check your entry'),
         h('p', { class: 'lead', style: 'margin-bottom:.5rem' }, 'Tap Edit to change an answer. Skipped questions are left out of the saved entry.'),
         t.questions.map((q, i) => {
@@ -571,7 +764,7 @@
 
   function editView(id) {
     const e = getEntries().find((x) => x.id === id);
-    if (!e || !T[e.type]) { location.hash = '#/entries'; return; }
+    if (!e || !T[e.type]) { location.hash = '#/notes'; return; }
     if (!session || session.editId !== id) {
       session = { type: e.type, idx: 0, answers: answersOf(e), date: e.date, title: e.title, source: e.source, duration: e.duration, editId: id, review: true };
     }
@@ -584,16 +777,19 @@
     const [, kind, arg] = location.hash.match(/^#\/(\w*)\/?([\w-]*)/) || [];
     // leaving an unsaved edit by navigating elsewhere drops it
     if (session && session.editId && !(kind === 'edit' && arg === session.editId)) session = null;
-    if (kind !== 'entries' && kind !== 'entry') { filters.q = ''; filters.type = 'all'; }
+    if (kind !== 'notes' && kind !== 'entries' && kind !== 'entry') { filters.q = ''; filters.type = 'all'; }
+    if (kind !== 'review') reviewMore = 1;
     switch (kind) {
       case 'new': return startOrResume(arg);
       case 'edit': return editView(arg);
       case 'entry': return entryView(arg);
-      case 'entries': return entriesView();
+      case 'notes': case 'entries': return notesView();
+      case 'review': return arg ? dayDetailView(arg) : reviewTab();
+      case 'close': return closeView();
       case 'more': return moreView();
       case 'passphrase': return changePassView();
       case 'about': return aboutView(arg);
-      default: return homeView();
+      default: return todayView();
     }
   }
   window.addEventListener('hashchange', route);
@@ -631,8 +827,7 @@
 
   function unsupportedView() {
     shell({ top: logo(), focus: true });
-    view(h('div', { class: 'empty' }, h('div', { class: 'badge' }, svg('lock')), h('h3', null, 'This browser cannot encrypt your notes'),
-      h('p', null, 'Second Brain needs a secure connection (https) and a current browser so it can keep your entries private. Open it from its normal address in an up-to-date browser.')));
+    view(emptyState('This browser cannot encrypt your notes', 'Second Brain needs a secure connection (https) and a current browser so it can keep your entries private. Open it from its normal address in an up-to-date browser.', 'lock'));
   }
 
   function passField(label, autocomplete, onInput, optional) {
@@ -794,9 +989,17 @@
 
   // Lock after time in the background; always flush pending writes when the page is hidden.
   let hiddenAt = 0;
+  // After midnight, redraw the screens that depend on the date so yesterday's leftovers show as carried over.
+  function checkNewDay() {
+    if (!V.unlocked || today() === shownDay) return;
+    shownDay = today();
+    if (/^(#\/?|#\/review|#\/close)?$/.test(location.hash)) route();
+  }
+  setInterval(checkNewDay, 60000);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); V.flush(); }
     else if (V.unlocked && V.currentMode() === 'pass' && hiddenAt && Date.now() - hiddenAt > LOCK_AFTER_MS) lockNow();
+    else checkNewDay();
   });
   window.addEventListener('pagehide', () => { V.flush(); });
 

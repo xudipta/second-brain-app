@@ -4,30 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Second Brain</title>
-  <meta name="description" content="A private capture notebook. It asks the questions one at a time and keeps your answers in your own words, on your device.">
-  <meta name="theme-color" content="#f7f7fb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0e0f1a" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="A private notebook and daily to-do list. Your tasks carry over until they are done, and your notes stay in your own words, on your device.">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Second Brain">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="preload" href="assets/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/newsreader-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
   <div id="shell">
-    <header id="topbar"></header>
-    <main id="app" tabindex="-1"></main>
     <nav id="tabs" aria-label="Main">
-      <a href="#/" data-tab="capture"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg><span>Capture</span></a>
-      <a href="#/entries" data-tab="entries"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Entries</span></a>
+      <div class="side-brand"><span class="wordmark"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></i>Second Brain</span></div>
+      <a href="#/" data-tab="today"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg><span>Today</span></a>
+      <a href="#/notes" data-tab="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/></svg><span>Notes</span></a>
+      <a href="#/review" data-tab="review"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span>Review</span></a>
       <a href="#/more" data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span>More</span></a>
     </nav>
+    <div id="col">
+      <header id="topbar"></header>
+      <main id="app" tabindex="-1"></main>
+    </div>
   </div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p style="padding:1rem">This app needs JavaScript.</p></noscript>
   <script src="assets/templates.js"></script>
+  <script src="assets/tasks.js"></script>
   <script src="assets/vault.js"></script>
   <script src="assets/app.js"></script>
 </body>

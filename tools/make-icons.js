@@ -6,19 +6,16 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 
-// A notebook with a spark on a deep-indigo tile. `pad` shrinks the artwork for maskable icons.
+// A paper sheet with a check on a forest-green tile. `pad` shrinks the artwork for maskable icons.
 function iconSvg({ pad = 0, round = true } = {}) {
   const s = 1 - pad * 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5646e8"/><stop offset="1" stop-color="#1b1456"/></linearGradient></defs>
-  <rect width="512" height="512" rx="${round ? 112 : 0}" fill="url(#g)"/>
+  <rect width="512" height="512" rx="${round ? 112 : 0}" fill="#1f5c4a"/>
   <g transform="translate(256 256) scale(${s}) translate(-256 -256)">
-    <rect x="132" y="104" width="248" height="304" rx="28" fill="#f1f0ff"/>
-    <rect x="132" y="104" width="44" height="304" rx="22" fill="#c9c6f2"/>
-    <rect x="204" y="170" width="140" height="14" rx="7" fill="#5646e8"/>
-    <rect x="204" y="214" width="140" height="14" rx="7" fill="#9d95ee"/>
-    <rect x="204" y="258" width="100" height="14" rx="7" fill="#9d95ee"/>
-    <path d="M352 300 l14 34 l34 14 l-34 14 l-14 34 l-14 -34 l-34 -14 l34 -14z" fill="#ffd166"/>
+    <rect x="140" y="96" width="232" height="320" rx="24" fill="#f5f3ee"/>
+    <path d="M188 200l36 36 70-76" fill="none" stroke="#1f5c4a" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="188" y="290" width="136" height="16" rx="8" fill="#1f5c4a" opacity=".35"/>
+    <rect x="188" y="330" width="96" height="16" rx="8" fill="#1f5c4a" opacity=".35"/>
   </g>
 </svg>`;
 }

@@ -108,7 +108,7 @@
     const k = await newDeviceKey();
     await keyPut(k);
     key = k; mode = 'device'; salt = null;
-    V.state = initial || { entries: [], draft: null };
+    V.state = initial || { entries: [], draft: null, tasks: [] };
     await writeNow();
     dropLegacy(); // only after the encrypted copy is safely written
   };
@@ -122,7 +122,7 @@
   V.create = async (pass, initial) => {
     salt = crypto.getRandomValues(new Uint8Array(16)); iter = ITERATIONS;
     key = await derive(pass, salt, iter); mode = 'pass';
-    V.state = initial || { entries: [], draft: null };
+    V.state = initial || { entries: [], draft: null, tasks: [] };
     await writeNow();
     dropLegacy();
   };
@@ -173,29 +173,32 @@
   // With a passphrase: encrypted with a key made from that passphrase (works in either mode).
   // Without one: in passphrase mode it is encrypted with the vault's own key; in device mode it is plain JSON.
   V.exportBackup = async (pass) => {
+    const data = { entries: V.state.entries, tasks: V.state.tasks || [] };
     if (pass) {
-      const s = crypto.getRandomValues(new Uint8Array(16)), k = await derive(pass, s, ITERATIONS), sealed = await seal(k, { entries: V.state.entries });
+      const s = crypto.getRandomValues(new Uint8Array(16)), k = await derive(pass, s, ITERATIONS), sealed = await seal(k, data);
       return JSON.stringify(Object.assign({ v: 1, kind: 'backup', kdf: 'PBKDF2-SHA256', iter: ITERATIONS, salt: b64(s) }, sealed), null, 2);
     }
-    if (mode === 'pass') return JSON.stringify(passEnvelope(await seal(key, { entries: V.state.entries }), { kind: 'backup' }), null, 2);
-    return JSON.stringify(V.state.entries, null, 2);
+    if (mode === 'pass') return JSON.stringify(passEnvelope(await seal(key, data), { kind: 'backup' }), null, 2);
+    return JSON.stringify(data, null, 2);
   };
   V.parseBackup = (text) => {
     const data = JSON.parse(text);
-    if (Array.isArray(data)) return { plain: data };
+    if (Array.isArray(data)) return { plain: { entries: data, tasks: [] } };          // oldest plain backups: a bare list of entries
+    if (data && Array.isArray(data.entries) && !data.ct) return { plain: { entries: data.entries, tasks: data.tasks || [] } };
     if (data && data.v === 1 && data.kind === 'backup' && data.ct) return { file: data };
     throw new Error('not a backup');
   };
   V.sameKeyAs = (file) => mode === 'pass' && !!key && !!salt && file.salt === b64(salt) && (file.iter || ITERATIONS) === iter;
   V.openBackup = async (file, pass) => {
     const k = pass == null && V.sameKeyAs(file) ? key : await derive(pass, unb64(file.salt), file.iter || ITERATIONS);
-    return (await open(k, file)).entries;
+    const data = await open(k, file);
+    return { entries: data.entries || [], tasks: data.tasks || [] }; // backups made before to-dos existed have no tasks
   };
   V.createFromBackup = async (file, pass) => {
     const k = await derive(pass, unb64(file.salt), file.iter || ITERATIONS);
     const data = await open(k, file);
     salt = unb64(file.salt); iter = file.iter || ITERATIONS; key = k; mode = 'pass';
-    V.state = { entries: data.entries || [], draft: null };
+    V.state = { entries: data.entries || [], draft: null, tasks: data.tasks || [] };
     await writeNow(); dropLegacy();
   };
 

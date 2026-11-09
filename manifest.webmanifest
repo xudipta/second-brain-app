@@ -1,14 +1,14 @@
 {
   "name": "Second Brain",
   "short_name": "Second Brain",
-  "description": "A private capture notebook. Asks the questions one at a time and keeps your answers in your own words.",
+  "description": "A daily to-do list that carries unfinished tasks forward, and a private notebook that keeps your answers in your own words.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f0d24",
-  "theme_color": "#1b1456",
+  "background_color": "#f5f3ee",
+  "theme_color": "#f5f3ee",
   "categories": ["productivity", "lifestyle"],
   "icons": [
     { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
@@ -17,6 +17,8 @@
     { "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ],
   "shortcuts": [
+    { "name": "Today", "url": "./#/", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Review", "url": "./#/review", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Session log", "url": "./#/new/session", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Journal", "url": "./#/new/journal", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Idea", "url": "./#/new/idea", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] }
