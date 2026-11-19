@@ -129,4 +129,33 @@ Ships in small pull requests (see the issue order below). Nothing new appears un
 
 ## Issues
 
-The list of issues, their order and dependencies is added here once they are created.
+Epic: [#1 Habits and meals tracking](https://github.com/xudipta/second-brain-app/issues/1). The work is these sub-issues:
+
+| # | Issue | Size | Depends on |
+|---|---|---|---|
+| [#2](https://github.com/xudipta/second-brain-app/issues/2) | Tracking logic and rules (`assets/tracking.js`) | M | none |
+| [#3](https://github.com/xudipta/second-brain-app/issues/3) | Store habits and meals in the encrypted vault, with backups and restore | S | #2 |
+| [#4](https://github.com/xudipta/second-brain-app/issues/4) | Design tokens and shared components | M | none |
+| [#5](https://github.com/xudipta/second-brain-app/issues/5) | Review: Tasks / Habits / Diet switch | S | none |
+| [#6](https://github.com/xudipta/second-brain-app/issues/6) | Today: Habits section with one-tap logging | M | #2, #3, #4 |
+| [#7](https://github.com/xudipta/second-brain-app/issues/7) | Today: Meals section with today's plate and four slots | M | #2, #3, #4 |
+| [#8](https://github.com/xudipta/second-brain-app/issues/8) | Add, edit, reorder and archive habits | M | #2, #3, #4, #6 |
+| [#9](https://github.com/xudipta/second-brain-app/issues/9) | Meal sheet: tap tiles, recent meals, note, skip | M | #2, #3, #4, #7 |
+| [#10](https://github.com/xudipta/second-brain-app/issues/10) | Zip export: daily habit and meal files | S | #2, #3 |
+| [#11](https://github.com/xudipta/second-brain-app/issues/11) | Review, Habits: stats, calendar, time of day, log past days | L | #2, #3, #4, #5, #6, #8 |
+| [#12](https://github.com/xudipta/second-brain-app/issues/12) | Review, Diet: average plate, daily chart, recent days, edit past meals | L | #2, #3, #4, #5, #7, #9 |
+| [#13](https://github.com/xudipta/second-brain-app/issues/13) | Tests: unit, end-to-end, compatibility, accessibility, CI | M | #2 to start, finishes last |
+| [#14](https://github.com/xudipta/second-brain-app/issues/14) | Docs, sources for the stats, rollout polish | S | #6 to #12 |
+
+### Build order (one small pull request each)
+
+1. **#2 and #3**: logic and storage. No visible change, fully unit tested.
+2. **#4 and #5**: design tokens and the Review switch.
+3. **#6 and #8**: habits on Today and the habit sheet.
+4. **#7 and #9**: meals on Today and the meal sheet.
+5. **#11**: Review, Habits.
+6. **#12**: Review, Diet.
+7. **#10**: export.
+8. **#13 and #14**: remaining tests, CI, docs and rollout. Tests are added alongside each earlier pull request wherever possible.
+
+Every pull request references its issue and must not break the existing Today, Notes, Review and More screens.
