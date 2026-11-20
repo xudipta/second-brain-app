@@ -232,3 +232,65 @@ test('merge: junk is skipped, orphan check-ins are dropped, and nothing throws',
   assert.equal(T.mergeTracking({}, undefined).habits, 0);
   assert.equal(T.mergeTracking({}, { habits: 'nope', habitLogs: {}, meals: 7 }).meals, 0);
 });
+
+// ---------- managing habits ----------
+const named = (name, order, over) => Object.assign(T.makeHabit(name, { order }, '2026-11-01', 1), over || {});
+
+test('habits are listed in order, archived ones separately', () => {
+  const a = named('A', 2), b = named('B', 0), c = named('C', 1, { archivedAt: 50 }), d = named('D', 3, { archivedAt: 90 });
+  const all = [a, b, c, d];
+  assert.deepEqual(T.activeHabits(all).map((h) => h.name), ['B', 'A']);
+  assert.deepEqual(T.archivedHabits(all).map((h) => h.name), ['D', 'C']); // most recently archived first
+  assert.equal(T.nextOrder(all), 4);
+  assert.equal(T.nextOrder([]), 0);
+});
+test('habits with the same order keep a stable order', () => {
+  const a = named('A', 0, { createdAt: 5, id: 'a' }), b = named('B', 0, { createdAt: 5, id: 'b' }), c = named('C', 0, { createdAt: 1, id: 'c' });
+  assert.deepEqual(T.activeHabits([b, a, c]).map((h) => h.name), ['C', 'A', 'B']);
+});
+test('updateHabit: rename, time tracking and goal; an empty name changes nothing', () => {
+  const h = named('Gym', 0);
+  assert.equal(T.updateHabit(h, { name: '  Strength  ', trackTime: false, weeklyGoal: 3 }), h);
+  assert.deepEqual([h.name, h.trackTime, h.weeklyGoal], ['Strength', false, 3]);
+  assert.equal(T.updateHabit(h, { name: '   ', weeklyGoal: 5 }), null);
+  assert.deepEqual([h.name, h.weeklyGoal], ['Strength', 3]);
+  T.updateHabit(h, { weeklyGoal: null }); assert.equal(h.weeklyGoal, null);
+  T.updateHabit(h, { weeklyGoal: 9 }); assert.equal(h.weeklyGoal, null);
+  T.updateHabit(h, { name: 'x'.repeat(90) }); assert.equal(h.name.length, 60);
+  T.updateHabit(h, {}); assert.equal(h.name.length, 60);
+});
+test('reorderHabit: moves among active habits, renumbers, stops at the ends', () => {
+  const a = named('A', 0), b = named('B', 1), c = named('C', 2), x = named('X', 1, { archivedAt: 9 });
+  const all = [a, b, c, x];
+  assert.equal(T.reorderHabit(all, b.id, -1), true);
+  assert.deepEqual(T.activeHabits(all).map((h) => h.name), ['B', 'A', 'C']);
+  assert.deepEqual(T.activeHabits(all).map((h) => h.order), [0, 1, 2]);
+  assert.equal(T.reorderHabit(all, b.id, -1), false);     // already first
+  assert.equal(T.reorderHabit(all, c.id, 1), false);      // already last
+  assert.equal(T.reorderHabit(all, x.id, -1), false);     // archived habits are not reordered
+  assert.equal(T.reorderHabit(all, 'nope', 1), false);
+  assert.equal(T.reorderHabit(all, a.id, 1), true);
+  assert.deepEqual(T.activeHabits(all).map((h) => h.name), ['B', 'C', 'A']);
+});
+test('archive keeps check-ins; unarchive puts the habit last', () => {
+  const a = named('A', 0), b = named('B', 1), state = { habits: [a, b], habitLogs: logs(a.id, [[2], [3]]) };
+  T.archiveHabit(a, 77);
+  assert.equal(a.archivedAt, 77); assert.equal(state.habitLogs.length, 2);
+  assert.deepEqual(T.activeHabits(state.habits).map((h) => h.name), ['B']);
+  T.unarchiveHabit(state.habits, a);
+  assert.equal(a.archivedAt, null);
+  assert.deepEqual(T.activeHabits(state.habits).map((h) => h.name), ['B', 'A']);
+});
+test('delete removes the habit and only its check-ins, and can be undone', () => {
+  const a = named('A', 0), b = named('B', 1);
+  const state = { habits: [a, b], habitLogs: [...logs(a.id, [[2], [3]]), ...logs(b.id, [[2]])] };
+  const snap = T.deleteHabit(state, a.id);
+  assert.deepEqual(state.habits.map((h) => h.name), ['B']);
+  assert.equal(state.habitLogs.length, 1); assert.equal(state.habitLogs[0].habitId, b.id);
+  assert.equal(snap.logs.length, 2); assert.equal(snap.index, 0);
+  assert.equal(T.deleteHabit(state, 'nope'), null);
+  T.restoreHabit(state, snap);
+  assert.deepEqual(state.habits.map((h) => h.name), ['A', 'B']);
+  assert.equal(state.habitLogs.length, 3);
+  T.restoreHabit({ habits: [], habitLogs: [] }, snap); // restoring into an empty vault does not throw
+});
