@@ -1,0 +1,60 @@
+{
+  "entries": [
+    {
+      "id": "mw31rdc0rgoe",
+      "created": 1793853000000,
+      "type": "idea",
+      "date": "2026-11-05",
+      "title": "Old idea",
+      "source": "",
+      "duration": "",
+      "tags": [],
+      "qa": [
+        {
+          "q": "What's the idea? Say it however it comes.",
+          "a": "An idea from the old release"
+        }
+      ],
+      "ans": [
+        "An idea from the old release",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "mw31rdc0b8nln",
+      "title": "Old task one",
+      "note": "",
+      "createdAt": 1793853000000,
+      "createdDate": "2026-11-05",
+      "plan0": "2026-11-05",
+      "plan": "2026-11-05",
+      "snoozes": [],
+      "done": null,
+      "doneDate": null,
+      "dropped": null,
+      "droppedDate": null
+    },
+    {
+      "id": "mw31rdc0vvb7w",
+      "title": "Old task two",
+      "note": "",
+      "createdAt": 1793853000000,
+      "createdDate": "2026-11-05",
+      "plan0": "2026-11-05",
+      "plan": "2026-11-05",
+      "snoozes": [],
+      "done": null,
+      "doneDate": null,
+      "dropped": null,
+      "droppedDate": null
+    }
+  ]
+}

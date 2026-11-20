@@ -1,0 +1,11 @@
+{
+  "name": "second-brain",
+  "private": true,
+  "description": "Second Brain: a private, encrypted notebook with to-dos, habits and meals. No build step; this file only exists for the tests.",
+  "scripts": {
+    "test": "node tests/run.js",
+    "test:e2e": "node tests/e2e/run.js"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "playwright": "^1.50.0" }
+}

@@ -1,0 +1,23 @@
+module.exports = { name: 'Passphrase lock: lock now, change passphrase, drafts survive', async run(t) {
+  const { url: U, ok, tmp: D } = t;
+  const b = t.browser; const p = await (await b.newContext({ viewport: { width: 390, height: 800 } })).newPage();
+  const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.goto(U); await p.waitForSelector('.page-title');
+  await p.goto(U + '#/new/idea'); await p.fill('#ans', 'half typed MID-DRAFT'); await p.waitForTimeout(600);
+  await p.goto(U + '#/passphrase'); await p.waitForSelector('text=Add a passphrase lock');
+  await p.fill('input[aria-label="Choose a passphrase"]', 'first phrase here'); await p.fill('input[aria-label="Type it again"]', 'first phrase here'); await p.check('#ack');
+  await p.click('button:has-text("Turn on passphrase lock")'); await p.waitForSelector('text=Lock now');
+  await p.click('text=Lock now'); await p.waitForSelector('text=Enter your passphrase');
+  ok(await p.locator('text=Lock now').count() === 0, 'More cleared on Lock now');
+  await p.fill('input[aria-label="Passphrase"]', 'first phrase here'); await p.click('button:has-text("Unlock")'); await p.waitForSelector('text=Lock now');
+  ok(true, 'unlock returns to More');
+  await p.click('text=Change passphrase');
+  await p.fill('input[aria-label="Current passphrase"]', 'first phrase here'); await p.fill('input[aria-label="New passphrase"]', 'second phrase here'); await p.fill('input[aria-label="Type the new one again"]', 'second phrase here');
+  await p.click('button:has-text("Change passphrase")'); await p.waitForSelector('text=Passphrase changed');
+  await p.reload(); await p.waitForSelector('text=Enter your passphrase');
+  await p.fill('input[aria-label="Passphrase"]', 'first phrase here'); await p.click('button:has-text("Unlock")'); await p.waitForSelector('text=did not work'); ok(true, 'old passphrase refused');
+  await p.fill('input[aria-label="Passphrase"]', 'second phrase here'); await p.click('button:has-text("Unlock")'); await p.waitForSelector('text=Lock now');
+  await p.goto(U + '#/'); await p.waitForSelector('text=Unfinished idea'); ok(true, 'draft survived mode switch and passphrase change');
+  await p.click('text=Continue'); ok((await p.inputValue('#ans')) === 'half typed MID-DRAFT', 'draft text intact');
+  ok(errs.length === 0, 'no page errors: ' + JSON.stringify(errs));
+} };

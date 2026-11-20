@@ -109,6 +109,6 @@
     return body ? `---\ndate: ${d}\ntype: todos\n---\n\n${body}` : '';
   };
 
-  window.Tasks = T;
-  if (typeof module !== 'undefined') module.exports = T;
+  if (typeof window !== 'undefined') window.Tasks = T;
+  if (typeof module !== 'undefined' && module.exports) module.exports = T;
 })();

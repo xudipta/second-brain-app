@@ -52,11 +52,15 @@ Limits: it does not protect against malware on your device, someone watching you
 Edit `assets/templates.js`, but only after the change is sourced in `second-brain/SOURCES.md`, and mirror the citation in `window.SOURCES` in the same file. No source, no question.
 
 ## Tests
-Unit tests for the tracking rules live in `tests/` and need nothing installed beyond Node 20 or later:
+Unit tests need nothing installed beyond Node 20 or later. End-to-end tests drive a real browser with a fixed clock:
 
 ```sh
-node tests/run.js
+node tests/run.js                                   # unit tests (also run by GitHub Actions on every pull request)
+npm install && npx playwright install chromium      # once, for the end-to-end tests
+node tests/e2e/run.js                               # end-to-end: every flow, old-backup compatibility, accessibility
 ```
+
+What each test covers, and which rule of the habits and meals plan it checks, is in [`tests/README.md`](tests/README.md).
 
 ## Run locally
 ```sh
