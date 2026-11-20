@@ -331,3 +331,42 @@ test('recentMeals returns copies, so editing one never changes a stored meal', (
   const a = mk('2026-11-01', 'lunch', { veg: 1 }); const r = T.recentMeals([a]);
   r[0].levels.veg = 3; assert.equal(a.levels.veg, 1);
 });
+
+// ---------- Review: the habit calendar ----------
+test('habitStart is the creation date, or an earlier logged day', () => {
+  const h = habit({ createdDate: '2026-11-05' });
+  assert.equal(T.habitStart(h, []), '2026-11-05');
+  assert.equal(T.habitStart(h, logs(h.id, [[7], [3]])), '2026-11-03');
+  assert.equal(T.habitStart(h, logs('other', [[1]])), '2026-11-05');
+});
+test('months: ymOf, addMonths across year ends, cmpMonths', () => {
+  assert.deepEqual(T.ymOf('2026-11-09'), { y: 2026, m: 10 });
+  assert.deepEqual(T.addMonths({ y: 2026, m: 11 }, 1), { y: 2027, m: 0 });
+  assert.deepEqual(T.addMonths({ y: 2027, m: 0 }, -1), { y: 2026, m: 11 });
+  assert.deepEqual(T.addMonths({ y: 2026, m: 5 }, -18), { y: 2024, m: 11 });
+  assert.deepEqual(T.addMonths({ y: 2026, m: 5 }, 0), { y: 2026, m: 5 });
+  assert.ok(T.cmpMonths({ y: 2027, m: 0 }, { y: 2026, m: 11 }) > 0);
+  assert.equal(T.cmpMonths({ y: 2026, m: 3 }, { y: 2026, m: 3 }), 0);
+});
+test('month calendar: Monday first, right number of days, leap February', () => {
+  const kinds = (cells) => cells.filter((c) => c.kind !== 'pad');
+  const nov = T.monthCells({ y: 2026, m: 10 }, '2026-11-09', '2026-11-01');     // 1 Nov 2026 is a Sunday: six blanks first
+  assert.equal(nov.filter((c) => c.kind === 'pad').length, 6); assert.equal(kinds(nov).length, 30); assert.equal(nov[6].date, '2026-11-01');
+  const feb28 = T.monthCells({ y: 2027, m: 1 }, '2027-03-01', '2027-01-01'); assert.equal(kinds(feb28).length, 28); assert.equal(feb28.filter((c) => c.kind === 'pad').length, 0); // 1 Feb 2027 is a Monday
+  const feb29 = T.monthCells({ y: 2028, m: 1 }, '2028-03-05', '2027-12-02'); assert.equal(kinds(feb29).length, 29); assert.equal(feb29.filter((c) => c.kind === 'pad').length, 1); // 1 Feb 2028 is a Tuesday
+  assert.equal(kinds(T.monthCells({ y: 1900, m: 1 }, '2026-01-01', '1900-01-01')).length, 28);   // 1900 was not a leap year
+  assert.equal(kinds(T.monthCells({ y: 2000, m: 1 }, '2026-01-01', '2000-01-01')).length, 29);   // 2000 was
+  assert.equal(kinds(T.monthCells({ y: 2027, m: 11 }, '2028-01-05', '2027-12-01')).length, 31);
+});
+test('month calendar: past, today, future, and days before the habit existed', () => {
+  const cells = T.monthCells({ y: 2026, m: 10 }, '2026-11-09', '2026-11-05').filter((c) => c.kind !== 'pad');
+  const kind = (d) => cells.find((c) => c.day === d).kind;
+  assert.deepEqual([kind(1), kind(4), kind(5), kind(8), kind(9), kind(10), kind(30)], ['before', 'before', 'day', 'day', 'today', 'future', 'future']);
+  const later = T.monthCells({ y: 2026, m: 11 }, '2026-11-09', '2026-11-05'); // a month entirely in the future
+  assert.ok(later.filter((c) => c.kind !== 'pad').every((c) => c.kind === 'future'));
+});
+test('partCounts counts only days that have a time of day', () => {
+  const h = habit({ createdDate: '2026-10-01' });
+  assert.deepEqual(T.partCounts(h, [...logs(h.id, [[2, 'evening'], [3, 'evening'], [4, 'morning'], [5]]), ...logs('other', [[6, 'morning']])]), { morning: 1, afternoon: 0, evening: 2, total: 3 });
+  assert.deepEqual(T.partCounts(h, []), { morning: 0, afternoon: 0, evening: 0, total: 0 });
+});

@@ -414,4 +414,12 @@ body.focus #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 .recent::-webkit-scrollbar { display: none; }
 .recent .clip { display: block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Review: Habits */
+.pick { flex-wrap: wrap; }
+.section .nav { margin-left: auto; display: flex; margin-block: -10px; }
+.section .nav .icon-btn { width: 44px; height: 44px; }
+.section .nav .icon-btn:disabled { opacity: .3; cursor: default; }
+.key { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-top: .6rem; font-size: .78rem; color: var(--ink-2); }
+.key span { display: inline-flex; align-items: center; gap: .35rem; }
+
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }

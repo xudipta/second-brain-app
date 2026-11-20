@@ -581,6 +581,73 @@
     });
   }
 
+  // ====================== REVIEW: HABITS ======================
+  // The habit and month being looked at are kept for the session. A month is { y, m } with m from 0 to 11.
+  const reviewHabit = { id: null, ym: null };
+  const monthTitle = (ym) => new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(ym.y, ym.m, 1));
+  const cellDay = (d) => { try { return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(parseDate(d)); } catch (e) { return d; } };
+  function redrawReviewHabits(...focusKeys) { const y = window.scrollY; quiet = true; reviewHabitsPanel(); quiet = false; window.scrollTo(0, y); if (focusKeys.length) focusByKey(...focusKeys); }
+
+  function reviewHabitsPanel() {
+    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
+    const t0 = today(), habits = Tr.activeHabits(getHabits()), logs = getHabitLogs();
+    if (!habits.length) {
+      view(...reviewHead('habits'), h('div', { class: 'empty' }, svg('review'), h('h3', null, 'No habits yet'),
+        h('p', null, 'Add a habit on Today. Here you will see how many days you did it, your usual time of day and a calendar.'), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
+      return;
+    }
+    const hb = habits.find((x) => x.id === reviewHabit.id) || habits[0];
+    if (reviewHabit.id !== hb.id) { reviewHabit.id = hb.id; reviewHabit.ym = null; }
+    const start = Tr.habitStart(hb, logs), firstYm = Tr.ymOf(start), nowYm = Tr.ymOf(t0);
+    let ym = reviewHabit.ym || nowYm;
+    if (Tr.cmpMonths(ym, firstYm) < 0) ym = firstYm; if (Tr.cmpMonths(ym, nowYm) > 0) ym = nowYm;
+    reviewHabit.ym = ym;
+
+    // the four stats (rules in tracking.js)
+    const st = Tr.habitStats(hb, logs, t0);
+    const stat = (n, l) => h('div', { class: 'stat' }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, l));
+    const stats = [
+      stat(`${st.month.done} of ${st.month.elapsed}`, 'Days this month'),
+      stat(plural(st.week.done, 'day'), st.week.goal ? `This week (goal ${st.week.goal})` : 'This week')
+    ];
+    if (hb.trackTime) stats.push(st.usualPart
+      ? stat(st.usualPart.part === 'mixed' ? 'Mixed' : PART_LABEL[st.usualPart.part], st.usualPart.part === 'mixed' ? `Usual time, ${st.usualPart.of} days with a time` : `Usual time, ${st.usualPart.count} of ${st.usualPart.of} days`)
+      : stat('–', 'Usual time'));
+    stats.push(st.backAfterMiss.total ? stat(`${st.backAfterMiss.back} of ${st.backAfterMiss.total}`, 'Back the day after a miss') : stat('–', 'Back the day after a miss (no misses yet)'));
+
+    // the month calendar
+    const cells = Tr.monthCells(ym, t0, start);
+    const logOn = (date) => Tr.findLog(logs, hb.id, date);
+    const cell = (c) => {
+      if (c.kind === 'pad' || c.kind === 'before') return h('div', { class: 'd x', 'aria-hidden': 'true' });
+      if (c.kind === 'future') return h('div', { class: 'd future', role: 'img', 'aria-label': `${cellDay(c.date)}: in the future` }, String(c.day));
+      const log = logOn(c.date), icon = log ? (log.part && hb.trackTime ? PART_ICON[log.part] : 'check') : null;
+      const state = log ? `done${log.part && hb.trackTime ? ', ' + PART_LABEL[log.part].toLowerCase() : ''}` : 'not logged';
+      return h('button', { type: 'button', class: 'd' + (log ? ' on' : '') + (c.kind === 'today' ? ' today' : ''), 'aria-label': `${cellDay(c.date)}: ${state}. Tap to change`, 'aria-current': c.kind === 'today' ? 'date' : null,
+        'data-focus-key': `cal-${c.date}`, onclick: () => habitTimeSheet(hb, c.date, () => redrawReviewHabits(`cal-${c.date}`)) },
+      icon ? [ic(icon), h('span', null, String(c.day))] : String(c.day));
+    };
+    const move = (n) => { reviewHabit.ym = Tr.addMonths(ym, n); redrawReviewHabits(n < 0 ? 'cal-prev' : 'cal-next', n < 0 ? 'cal-next' : 'cal-prev'); };
+    const prevOff = Tr.cmpMonths(ym, firstYm) <= 0, nextOff = Tr.cmpMonths(ym, nowYm) >= 0;
+    const navBtn = (icon, label, key, off, fn) => h('button', { class: 'icon-btn', type: 'button', 'aria-label': label, 'data-focus-key': key, disabled: off ? true : null, onclick: fn }, svg(icon));
+    const logged = cells.filter((c) => c.date && logOn(c.date));
+    const counts = Tr.partCounts(hb, logs);
+
+    view(
+      ...reviewHead('habits'),
+      h('div', { class: 'pick', role: 'group', 'aria-label': 'Habit' }, habits.map((x) => h('button', { type: 'button', 'aria-pressed': String(x.id === hb.id), onclick: () => { reviewHabit.id = x.id; reviewHabit.ym = null; redrawReviewHabits(); } }, x.name))),
+      h('div', { class: 'stats', style: 'margin-top:1rem' }, stats),
+      h('div', { class: 'section' }, h('h2', null, monthTitle(ym)),
+        h('div', { class: 'nav' }, navBtn('back', `Previous month, ${monthTitle(Tr.addMonths(ym, -1))}`, 'cal-prev', prevOff, () => move(-1)), navBtn('chevron', `Next month, ${monthTitle(Tr.addMonths(ym, 1))}`, 'cal-next', nextOff, () => move(1)))),
+      h('div', { class: 'key' }, hb.trackTime ? Tr.PARTS.map((k) => h('span', null, ic(PART_ICON[k]), PART_LABEL[k].toLowerCase())) : null, h('span', null, ic('check'), hb.trackTime ? 'no time set' : 'done')),
+      h('div', { class: 'cal', role: 'group', 'aria-label': `${hb.name}, ${monthTitle(ym)}` }, ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => h('div', { class: 'h', 'aria-hidden': 'true' }, d)), cells.map(cell)),
+      h('table', { class: 'sr-only' }, h('caption', null, logged.length ? `${hb.name}: days done in ${monthTitle(ym)}` : `${hb.name}: no days logged in ${monthTitle(ym)}`),
+        logged.length ? [h('thead', null, h('tr', null, h('th', null, 'Day'), h('th', null, 'Time of day'), h('th', null, 'Note'))),
+          h('tbody', null, logged.map((c) => { const l = logOn(c.date); return h('tr', null, h('td', null, cellDay(c.date)), h('td', null, l.part && hb.trackTime ? PART_LABEL[l.part] : ''), h('td', null, l.note)); }))] : null),
+      hb.trackTime ? [h('div', { class: 'section' }, h('h2', null, 'Time of day'), h('span', { class: 'count-chip' }, counts.total ? `${plural(counts.total, 'day')} with a time` : '')),
+        Tr.PARTS.map((k) => h('div', { class: 'hbar' }, h('span', { class: 't' }, ic(PART_ICON[k]), PART_LABEL[k]), h('span', { class: 'tr', 'aria-hidden': 'true' }, h('i', { style: `width:${counts.total ? Math.round(counts[k] / counts.total * 100) : 0}%` })), h('b', null, counts[k])))] : null);
+  }
+
   // --- close the day ---
   function closeView() {
     const t0 = today(), v = Tk.today(getTasks(), t0), left = v.carried.concat(v.planned);
@@ -622,9 +689,7 @@
   // Habits and Diet are built in the next steps; until then each panel says what it will show.
   function reviewSoon(panel) {
     shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
-    const [title, text] = panel === 'habits'
-      ? ['Habit tracking is on its way', 'Soon you will log habits on Today, and see here how many days you went, your usual time of day and a month calendar.']
-      : ['Meal tracking is on its way', 'Soon you will log meals on Today, and see here your average plate and how each day looked.'];
+    const [title, text] = ['Meal tracking is on its way', 'Soon you will log meals on Today, and see here your average plate and how each day looked.'];
     view(...reviewHead(panel), h('div', { class: 'empty' }, svg('review'), h('h3', null, title), h('p', null, text), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
   }
   function barChart(per, t0) {
@@ -1085,7 +1150,7 @@
       case 'edit': return editView(arg);
       case 'entry': return entryView(arg);
       case 'notes': case 'entries': return notesView();
-      case 'review': return arg === 'habits' || arg === 'diet' ? reviewSoon(arg) : arg ? dayDetailView(arg) : reviewTab();
+      case 'review': return arg === 'habits' ? reviewHabitsPanel() : arg === 'diet' ? reviewSoon('diet') : arg ? dayDetailView(arg) : reviewTab();
       case 'close': return closeView();
       case 'habits': return habitsView();
       case 'more': return moreView();
