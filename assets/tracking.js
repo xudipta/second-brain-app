@@ -214,11 +214,37 @@
     return out;
   };
 
+  // ---- Review: the habit calendar ----
+  // A habit "starts" on its creation date, or on an earlier day that was logged (a day logged before it was created still counts).
+  T.habitStart = (habit, logs) => [habit.createdDate].concat(logs.filter((l) => l.habitId === habit.id).map((l) => l.date)).sort()[0];
+  // Months are { y, m } with m from 0 to 11.
+  T.ymOf = (date) => ({ y: Number(date.slice(0, 4)), m: Number(date.slice(5, 7)) - 1 });
+  T.addMonths = (ym, n) => { const t = ym.y * 12 + ym.m + n; return { y: Math.floor(t / 12), m: ((t % 12) + 12) % 12 }; };
+  T.cmpMonths = (a, b) => a.y * 12 + a.m - (b.y * 12 + b.m);
+  // The cells of a month calendar, Monday first: leading blanks, then each day as 'before' (the habit did not exist yet),
+  // 'day' (a past day), 'today' or 'future'.
+  T.monthCells = (ym, today, start) => {
+    const first = `${ym.y}-${pad(ym.m + 1)}-01`, lead = (parse(first).getDay() + 6) % 7, days = new Date(ym.y, ym.m + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < lead; i++) cells.push({ kind: 'pad' });
+    for (let d = 1; d <= days; d++) {
+      const date = `${ym.y}-${pad(ym.m + 1)}-${pad(d)}`;
+      cells.push({ date, day: d, kind: date > today ? 'future' : date < start ? 'before' : date === today ? 'today' : 'day' });
+    }
+    return cells;
+  };
+  // How many logged days fell in each part of the day (only days that have one).
+  T.partCounts = (habit, logs) => {
+    const c = { morning: 0, afternoon: 0, evening: 0, total: 0 };
+    logs.forEach((l) => { if (l.habitId === habit.id && PARTS.includes(l.part)) { c[l.part]++; c.total++; } });
+    return c;
+  };
+
   // ---- habit stats (Review) ----
   // `today` is the current day. Nothing here is a streak.
   T.habitStats = (habit, logs, today) => {
     const mine = logs.filter((l) => l.habitId === habit.id), dates = new Set(mine.map((l) => l.date));
-    const start = [habit.createdDate].concat([...dates]).sort()[0];   // a day logged before the habit's creation date still counts
+    const start = T.habitStart(habit, logs);
     const monthStart = today.slice(0, 8) + '01', from = start > monthStart ? start : monthStart;
     const monthDone = mine.filter((l) => l.date >= from && l.date <= today).length;
     const mon = mondayOf(today);
