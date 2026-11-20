@@ -27,6 +27,12 @@
     notebook: '<path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM6 3v18M10 8h5M10 12h5"/>',
     chevron: '<path d="M9 5l7 7-7 7"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
+    dusk: '<path d="M4 18h16M7.5 18a4.5 4.5 0 0 1 9 0M12 8v2M5 11.5l1.4 1.4M19 11.5l-1.4 1.4"/>',
+    moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+    up: '<path d="M6 15l6-6 6 6"/>',
+    down: '<path d="M6 9l6 6 6-6"/>',
+    archive: '<path d="M4 7h16v4H4zM6 11v8h12v-8M10 15h4"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     arrowup: '<path d="M12 19V5M6 11l6-6 6 6"/>',
     review: '<path d="M5 20V11M12 20V5M19 20v-6"/>',
@@ -222,7 +228,7 @@
   }
 
   // Redraw the Today screen without jumping to the top or replaying the entrance animation.
-  function redrawToday() { const y = window.scrollY; quiet = true; todayView(); quiet = false; window.scrollTo(0, y); }
+  function redrawToday(focusKey) { const y = window.scrollY; quiet = true; todayView(); quiet = false; window.scrollTo(0, y); if (focusKey) focusByKey(focusKey); }
   let quiet = false;
 
   function taskRow(t, t0) {
@@ -270,6 +276,7 @@
         h('div', { class: 'grow' }, h('strong', null, 'Install Second Brain'), h('span', { class: 'sub' }, 'Open it like an app, even offline.')),
         h('button', { class: 'btn sm', onclick: askInstall }, 'Install'),
         h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { try { sessionStorage.setItem('sb.noinstall', '1'); } catch (e) { /* ignore */ } todayView(); } }, svg('close'))) : null,
+      habitsSection(t0),
       v.carried.length ? [h('div', { class: 'section' }, h('h2', null, 'Carried over'), h('span', { class: 'count-chip' }, v.carried.length)), list(v.carried)] : null,
       h('div', { class: 'section' }, h('h2', null, 'Today'), h('span', { class: 'count-chip' }, v.planned.length || '')),
       v.planned.length ? list(v.planned) : h('p', { class: 'empty-line' }, total ? (openCount ? 'Nothing else planned for today.' : 'Everything planned is done.') : 'Nothing planned yet. Add your first task below. Whatever you do not finish carries over to the next day.'),
@@ -311,6 +318,171 @@
         h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'Cancel'))));
     document.addEventListener('keydown', onKey);
     document.body.append(overlay); title.focus();
+  }
+
+  // ====================== HABITS ======================
+  const PART_LABEL = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening' };
+  const PART_HINT = { morning: 'before 12', afternoon: '12 to 5', evening: 'after 5' };
+  const PART_ICON = { morning: 'sun', afternoon: 'dusk', evening: 'moon' };
+  const ic = (name) => { const s = svg(name); s.setAttribute('class', 'ic'); return s; };
+  const focusByKey = (...keys) => { for (const k of keys) { const el = document.querySelector(`[data-focus-key="${k}"]`); if (el && !el.disabled) { el.focus(); return true; } } return false; };
+  const fullDay = (d) => `${weekday(d)}, ${longDay(d)}`;
+
+  // A bottom sheet. While it is open the page behind it is inert, Escape closes it, and focus goes back to the control
+  // that opened it (found again by its data-focus-key, because the screen behind may have been redrawn).
+  function openSheet(label, build) {
+    const opener = document.activeElement, key = opener && opener.getAttribute ? opener.getAttribute('data-focus-key') : null;
+    const page = document.getElementById('shell');
+    document.getElementById('toast').hidden = true; // a toast would sit on top of the sheet
+    const overlay = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': label, onclick: (ev) => { if (ev.target === overlay) close(); } });
+    const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+    function close() {
+      overlay.remove(); document.removeEventListener('keydown', onKey); page.inert = false;
+      if (!(key && focusByKey(key)) && opener && opener.isConnected) opener.focus();
+    }
+    overlay.append(build(close));
+    document.addEventListener('keydown', onKey); page.inert = true; document.body.append(overlay);
+    const first = overlay.querySelector('input, button'); if (first) first.focus();
+    return close;
+  }
+
+  // One tap on the checkbox logs today, with the time of day from the clock. Undo is always offered.
+  function toggleHabit(hb, date, afterKey) {
+    const logs = getHabitLogs(), existing = Tr.findLog(logs, hb.id, date);
+    if (existing) {
+      const removed = Tr.unlogHabit(logs, hb.id, date); saveTracking(); redrawToday(afterKey);
+      toast(`${hb.name} unmarked.`, { label: 'Undo', run: () => { getHabitLogs().push(removed); saveTracking(); route(); } });
+    } else {
+      const part = hb.trackTime ? Tr.partOfDay(new Date()) : null;
+      Tr.logHabit(logs, hb.id, date, { part }, Date.now()); saveTracking(); redrawToday(afterKey);
+      toast(`${hb.name} done${part ? ', ' + PART_LABEL[part].toLowerCase() : ''}.`, { label: 'Undo', run: () => { Tr.unlogHabit(getHabitLogs(), hb.id, date); saveTracking(); route(); } });
+    }
+  }
+
+  function habitRow(hb, t0, logs) {
+    const log = Tr.findLog(logs, hb.id, t0), dots = Tr.weekDots(hb.id, logs, t0), cbKey = `habit-cb-${hb.id}`, chipKey = `habit-chip-${hb.id}`;
+    const chip = log && hb.trackTime
+      ? h('button', { class: 'when-chip', type: 'button', 'data-focus-key': chipKey, 'aria-label': `${hb.name}, ${log.part ? PART_LABEL[log.part] : 'no time set'}. Change the time of day`,
+        onclick: () => habitTimeSheet(hb, t0, () => redrawToday(chipKey)) }, log.part ? [ic(PART_ICON[log.part]), PART_LABEL[log.part]] : 'Add time')
+      : null;
+    return h('div', { class: 'habit' },
+      h('button', { class: 'cb', type: 'button', role: 'checkbox', 'aria-checked': String(!!log), 'aria-label': `Mark ${hb.name} ${log ? 'not done' : 'done'}`, 'data-focus-key': cbKey, onclick: () => toggleHabit(hb, t0, cbKey) }, svg('check')),
+      h('div', { class: 'name' }, h('b', null, hb.name), chip || h('small', null, log ? 'Done today' : 'Not yet today')),
+      h('div', { class: 'dots', role: 'img', 'aria-label': `Last 7 days: ${dots.filter((d) => d.done).length} of 7 days` }, dots.map((d) => h('i', { class: (d.done ? 'on' : '') + (d.today ? ' now' : '') }))));
+  }
+
+  // The Habits section on Today. With no habits it is just a prompt to add one.
+  function habitsSection(t0) {
+    const habits = Tr.activeHabits(getHabits()), logs = getHabitLogs();
+    const doneCount = habits.filter((hb) => Tr.findLog(logs, hb.id, t0)).length;
+    return [
+      h('div', { class: 'section' }, h('h2', null, 'Habits'),
+        habits.length ? h('span', { class: 'count-chip' }, `${doneCount} of ${habits.length}`) : null,
+        habits.length ? h('a', { class: 'push link-btn', href: '#/habits', 'data-focus-key': 'habits-edit' }, 'Edit') : null),
+      habits.length ? null : h('p', { class: 'empty-line' }, 'Track something you want to do regularly, like the gym or reading.'),
+      habits.map((hb) => habitRow(hb, t0, logs)),
+      h('div', { class: 'link-row' }, h('button', { class: 'link-btn', type: 'button', 'data-focus-key': 'add-habit', onclick: () => habitEditorSheet(null, () => redrawToday('add-habit')) }, habits.length ? '+ Add habit' : '+ Add a habit'))
+    ];
+  }
+
+  // Set or change the time of day and note for one habit on one day (today, or a past day from Review), or remove the log.
+  function habitTimeSheet(hb, date, after) {
+    const existing = Tr.findLog(getHabitLogs(), hb.id, date), isToday = date === today();
+    let part = existing ? existing.part : null;
+    const note = h('input', { type: 'text', value: existing ? existing.note : '', maxlength: 1000, placeholder: 'Optional. What did you do?', autocomplete: 'off' });
+    return openSheet(`${hb.name}, ${dayLabel(date)}`, (close) => {
+      const btns = Tr.PARTS.map((k) => h('button', { type: 'button', class: 'bigbtn', 'data-part': k, 'aria-pressed': String(part === k), onclick: () => { part = k; btns.forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-part') === part))); } },
+        ic(PART_ICON[k]), PART_LABEL[k], h('small', null, PART_HINT[k])));
+      const save = () => { Tr.logHabit(getHabitLogs(), hb.id, date, { part: hb.trackTime ? part : null, note: note.value }, Date.now()); saveTracking(); after && after(); close(); };
+      const remove = () => {
+        const removed = Tr.unlogHabit(getHabitLogs(), hb.id, date); saveTracking(); after && after(); close();
+        if (removed) toast(`${hb.name} unmarked for ${dayLabel(date)}.`, { label: 'Undo', run: () => { getHabitLogs().push(removed); saveTracking(); route(); } });
+      };
+      return h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); save(); } },
+        h('h3', null, hb.name, h('small', null, fullDay(date))),
+        hb.trackTime ? [h('div', { class: 'eyebrow', style: 'margin-top:.9rem' }, 'When did you do it?'), h('div', { class: 'big3', role: 'group', 'aria-label': 'Time of day' }, btns)] : null,
+        h('label', { class: 'field' }, 'Note', note),
+        h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit', style: 'flex:1' }, 'Save'),
+          existing ? h('button', { class: 'btn danger', type: 'button', onclick: remove }, isToday ? "Remove today's log" : "Remove this day's log") : h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'Cancel')));
+    });
+  }
+
+  // Add a habit (habit is null) or edit one.
+  function habitEditorSheet(habit, after) {
+    const editing = !!habit; let trackTime = editing ? habit.trackTime : true, goal = editing ? habit.weeklyGoal : null;
+    const SUGGESTIONS = ['Gym', 'Walk', 'Read', 'Stretch', 'Water', 'Meditate'];
+    return openSheet(editing ? 'Edit habit' : 'New habit', (close) => {
+      const nameIn = h('input', { type: 'text', maxlength: 60, value: editing ? habit.name : '', placeholder: 'For example: Gym', autocomplete: 'off', 'aria-describedby': 'habit-msg' });
+      const err = h('div', { class: 'form-msg err', id: 'habit-msg', role: 'alert' }, ''), warn = h('div', { class: 'form-msg info', 'aria-live': 'polite' }, '');
+      const chips = SUGGESTIONS.map((s) => h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => { nameIn.value = s; sync(); nameIn.focus(); } }, s));
+      const sync = () => {
+        err.textContent = '';
+        const v = nameIn.value.trim().toLowerCase();
+        chips.forEach((c) => c.setAttribute('aria-pressed', String(!!v && c.textContent.toLowerCase() === v)));
+        const dup = v && getHabits().some((x) => x !== habit && x.name.toLowerCase() === v);
+        warn.textContent = dup ? `You already have a habit called "${nameIn.value.trim()}". You can still add it.` : '';
+      };
+      nameIn.addEventListener('input', sync);
+      const sw = h('button', { type: 'button', class: 'switch', role: 'switch', 'aria-checked': String(trackTime), 'aria-label': 'Track time of day', onclick: () => { trackTime = !trackTime; sw.setAttribute('aria-checked', String(trackTime)); } });
+      const goalVal = h('span', { style: 'min-width:4.6rem;white-space:nowrap', 'aria-live': 'polite' }, '');
+      const showGoal = () => { goalVal.textContent = goal ? `${goal} ${goal === 1 ? 'day' : 'days'}` : 'None'; less.disabled = goal === null; more.disabled = goal === 7; };
+      const less = h('button', { type: 'button', 'aria-label': 'Fewer days a week', onclick: () => { goal = goal === null ? null : goal === 1 ? null : goal - 1; showGoal(); } }, '–');
+      const more = h('button', { type: 'button', 'aria-label': 'More days a week', onclick: () => { goal = goal === null ? 3 : Math.min(7, goal + 1); showGoal(); } }, '+');
+      showGoal();
+      const submit = () => {
+        const name = nameIn.value.trim();
+        if (!name) { err.textContent = 'Give the habit a name.'; nameIn.focus(); return; }
+        if (editing) Tr.updateHabit(habit, { name, trackTime, weeklyGoal: goal });
+        else getHabits().push(Tr.makeHabit(name, { trackTime, weeklyGoal: goal, order: Tr.nextOrder(getHabits()) }, today(), Date.now()));
+        saveTracking(); after && after(); close();
+      };
+      return h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); submit(); } },
+        h('h3', null, editing ? 'Edit habit' : 'New habit'),
+        h('label', { class: 'field', style: 'margin-top:.2rem' }, 'What do you want to track?', nameIn), err, warn,
+        editing ? null : h('div', { class: 'chipset', role: 'group', 'aria-label': 'Suggestions' }, chips),
+        h('div', { class: 'rowline', style: 'margin-top:.9rem' }, h('div', null, h('b', null, 'Track time of day'), h('small', null, 'Morning, afternoon or evening when you log it')), sw),
+        h('div', { class: 'rowline' }, h('div', null, h('b', null, 'Weekly goal'), h('small', null, 'Optional. Shown in Review, never as a streak')), h('div', { class: 'stepper' }, less, goalVal, more)),
+        h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit', style: 'flex:1' }, editing ? 'Save' : 'Add habit'), h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'Cancel'),
+          editing ? h('button', { class: 'btn danger', type: 'button', onclick: () => { deleteHabit(habit, () => { if (after) after(); close(); }); } }, 'Delete') : null));
+    });
+  }
+
+  // Delete a habit and its check-ins, after a clear warning, with Undo.
+  function deleteHabit(hb, after) {
+    const n = getHabitLogs().filter((l) => l.habitId === hb.id).length;
+    if (!confirm(`Delete "${hb.name}"${n ? ` and its ${plural(n, 'check-in')}` : ''}? You can undo right after.`)) return false;
+    const snap = Tr.deleteHabit(V.state, hb.id); saveTracking(); after && after();
+    toast(`${hb.name} deleted.`, { label: 'Undo', run: () => { Tr.restoreHabit(V.state, snap); saveTracking(); route(); } });
+    return true;
+  }
+
+  // Manage habits: edit, reorder, archive, delete.
+  function redrawHabits(...keys) { const y = window.scrollY; quiet = true; habitsView(); quiet = false; window.scrollTo(0, y); if (keys.length) focusByKey(...keys); }
+  function habitsView() {
+    shell({ top: [backBtn('#/', 'Back to Today'), h('div', { class: 'title' }, 'Habits')], tab: 'today' });
+    const all = getHabits(), active = Tr.activeHabits(all), archived = Tr.archivedHabits(all);
+    const meta = (hb) => [hb.trackTime ? 'Tracks time of day' : 'No time of day', hb.weeklyGoal ? `Goal ${hb.weeklyGoal} ${hb.weeklyGoal === 1 ? 'day' : 'days'} a week` : null].filter(Boolean).join(' · ');
+    const iconBtn = (icon, label, key, fn, disabled) => h('button', { class: 'icon-btn', type: 'button', 'aria-label': label, 'data-focus-key': key, disabled: disabled ? true : null, onclick: fn }, svg(icon));
+    const move = (hb, d) => { Tr.reorderHabit(all, hb.id, d); saveTracking(); redrawHabits(`mv-${d < 0 ? 'up' : 'down'}-${hb.id}`, `mv-${d < 0 ? 'down' : 'up'}-${hb.id}`); };
+    view(
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Today'), h('h1', { class: 'page-title' }, 'Habits'),
+      h('p', { class: 'lead' }, 'Add, rename, reorder or archive the habits you track. Archived habits keep their history.'),
+      h('div', { class: 'section' }, h('h2', null, 'Active'), h('span', { class: 'count-chip' }, active.length || '')),
+      active.length ? h('ul', { class: 'tasks' }, active.map((hb, i) => h('li', { class: 'mrow' },
+        h('div', { class: 'txt' }, h('b', null, hb.name), h('small', null, meta(hb))),
+        h('div', { class: 'acts' },
+          iconBtn('up', `Move ${hb.name} up`, `mv-up-${hb.id}`, () => move(hb, -1), i === 0),
+          iconBtn('down', `Move ${hb.name} down`, `mv-down-${hb.id}`, () => move(hb, 1), i === active.length - 1),
+          iconBtn('edit', `Edit ${hb.name}`, `edit-${hb.id}`, () => habitEditorSheet(hb, () => redrawHabits(`edit-${hb.id}`))),
+          iconBtn('archive', `Archive ${hb.name}`, `arch-${hb.id}`, () => { Tr.archiveHabit(hb, Date.now()); saveTracking(); redrawHabits('add-habit'); toast(`${hb.name} archived.`, { label: 'Undo', run: () => { hb.archivedAt = null; saveTracking(); route(); } }); }))))) : h('p', { class: 'empty-line' }, 'No habits yet.'),
+      h('div', { class: 'link-row' }, h('button', { class: 'link-btn', type: 'button', 'data-focus-key': 'add-habit', onclick: () => habitEditorSheet(null, () => redrawHabits('add-habit')) }, '+ Add habit')),
+      archived.length ? [h('div', { class: 'section' }, h('h2', null, 'Archived'), h('span', { class: 'count-chip' }, archived.length)),
+        h('ul', { class: 'tasks' }, archived.map((hb) => h('li', { class: 'mrow' },
+          h('div', { class: 'txt' }, h('b', null, hb.name), h('small', null, `${plural(getHabitLogs().filter((l) => l.habitId === hb.id).length, 'check-in')} kept`)),
+          h('div', { class: 'acts' },
+            h('button', { class: 'btn sm secondary', type: 'button', 'aria-label': `Unarchive ${hb.name}`, onclick: () => { Tr.unarchiveHabit(all, hb); saveTracking(); redrawHabits('add-habit'); } }, 'Unarchive'),
+            iconBtn('trash', `Delete ${hb.name}`, `del-${hb.id}`, () => deleteHabit(hb, () => redrawHabits('add-habit')))))))] : null,
+      null);
   }
 
   // --- close the day ---
@@ -819,6 +991,7 @@
       case 'notes': case 'entries': return notesView();
       case 'review': return arg === 'habits' || arg === 'diet' ? reviewSoon(arg) : arg ? dayDetailView(arg) : reviewTab();
       case 'close': return closeView();
+      case 'habits': return habitsView();
       case 'more': return moreView();
       case 'passphrase': return changePassView();
       case 'about': return aboutView(arg);

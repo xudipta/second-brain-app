@@ -88,6 +88,47 @@
     return out;
   };
 
+  // ---- managing habits ----
+  const byOrder = (a, b) => a.order - b.order || a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1);
+  T.activeHabits = (habits) => habits.filter((h) => !h.archivedAt).sort(byOrder);
+  T.archivedHabits = (habits) => habits.filter((h) => h.archivedAt).sort((a, b) => b.archivedAt - a.archivedAt || byOrder(a, b));
+  T.nextOrder = (habits) => (habits.length ? Math.max(...habits.map((h) => h.order)) + 1 : 0);
+
+  // Change a habit's name, time-of-day tracking or weekly goal. An empty name is refused (returns null, nothing changes).
+  T.updateHabit = (habit, patch) => {
+    const p = patch || {}, name = 'name' in p ? String(p.name).trim().slice(0, 60) : habit.name;
+    if (!name) return null;
+    habit.name = name;
+    if ('trackTime' in p) habit.trackTime = p.trackTime !== false;
+    if ('weeklyGoal' in p) habit.weeklyGoal = goalOf(p.weeklyGoal);
+    return habit;
+  };
+  // Move an active habit up (-1) or down (+1) among the active ones. Returns false at either end.
+  T.reorderHabit = (habits, id, delta) => {
+    const list = T.activeHabits(habits), i = list.findIndex((h) => h.id === id), j = i + delta;
+    if (i < 0 || j < 0 || j >= list.length) return false;
+    [list[i], list[j]] = [list[j], list[i]];
+    list.forEach((h, k) => { h.order = k; });
+    return true;
+  };
+  // Archiving keeps every check-in; the habit just leaves Today and the picker. Unarchiving puts it last.
+  T.archiveHabit = (habit, now) => { habit.archivedAt = now || Date.now(); return habit; };
+  T.unarchiveHabit = (habits, habit) => { habit.archivedAt = null; habit.order = T.nextOrder(habits.filter((h) => h !== habit)); return habit; };
+  // Delete a habit and its check-ins. Returns what is needed to undo it.
+  T.deleteHabit = (state, id) => {
+    const habits = state.habits || [], i = habits.findIndex((h) => h.id === id);
+    if (i < 0) return null;
+    const habit = habits.splice(i, 1)[0], logs = state.habitLogs || [], removed = [];
+    for (let k = logs.length - 1; k >= 0; k--) if (logs[k].habitId === id) removed.unshift(logs.splice(k, 1)[0]);
+    return { habit, index: i, logs: removed };
+  };
+  T.restoreHabit = (state, snap) => {
+    const habits = state.habits = state.habits || [], logs = state.habitLogs = state.habitLogs || [];
+    habits.splice(Math.min(snap.index, habits.length), 0, snap.habit);
+    snap.logs.forEach((l) => { if (!T.findLog(logs, l.habitId, l.date)) logs.push(l); });
+    return snap.habit;
+  };
+
   // ---- meals ----
   const level = (n) => { n = Math.round(Number(n)); return n >= 3 ? 3 : n >= 1 ? n : 0; }; // anything unusable (NaN, negative) becomes 0
   T.cleanLevels = (raw) => { const o = {}; GROUPS.forEach((g) => { o[g] = level(raw && raw[g]); }); return o; };

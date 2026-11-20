@@ -390,4 +390,20 @@ body.focus #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 .drow small { grid-column: 2; color: var(--ink-3); font-size: .8rem; }
 .foot { color: var(--ink-3); font-size: .8rem; margin-top: 1rem; }
 
+/* the stepper and the habit manager rows */
+.stepper button { position: relative; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 1.2rem; cursor: pointer; }
+.stepper button::after { content: ""; position: absolute; inset: -5px; }
+.stepper button:disabled { opacity: .35; cursor: default; }
+.mrow { display: flex; align-items: center; gap: .5rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
+.mrow .txt { flex: 1; min-width: 0; }
+.mrow .txt b { display: block; font-weight: 550; overflow-wrap: anywhere; }
+.mrow .txt small { color: var(--ink-3); font-size: .8rem; }
+.mrow .acts { display: flex; align-items: center; flex: none; }
+.mrow .icon-btn { width: 44px; height: 44px; }
+.mrow .icon-btn:disabled { opacity: .3; cursor: default; }
+.form-msg { font-size: .84rem; margin-top: .4rem; }
+.form-msg:empty { margin: 0; }
+.form-msg.err { color: var(--danger); font-weight: 550; }
+.form-msg.info { color: var(--ink-3); }
+
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }
