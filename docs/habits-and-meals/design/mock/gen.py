@@ -1,5 +1,9 @@
-import os
-M = os.path.dirname(os.path.abspath(__file__))
+# Builds the approved design screens from the app's real stylesheet (assets/styles.css), so they double as a visual test of it.
+#   python3 gen.py [output dir] [stylesheet href]
+import os, sys
+M = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
+CSS = sys.argv[2] if len(sys.argv) > 2 else '../../../../assets/styles.css'
+os.makedirs(M, exist_ok=True)
 IC = {
  'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
  'moon': '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
@@ -17,15 +21,15 @@ def tabs(active):
 WORDMARK = f'<span class="wordmark"><i>{ic("check","")}</i>Second Brain</span>'.replace('<svg class="" ','<svg ')
 def page(top, body, active, modal=''):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="mock.css"></head><body>
+<link rel="stylesheet" href="{CSS}"></head><body>
 <div id="shell">{tabs(active)}<div id="col"><header id="topbar">{top}</header><main id="app"><div class="view" style="animation:none">{body}</div></main></div></div>{modal}</body></html>'''
 
 def bar(p=0, v=0, c=0, o=0):
-    segs = [(p,'pb-p'),(v,'pb-v'),(c,'pb-c'),(o,'pb-o')]
+    segs = [(p,'g-protein'),(v,'g-veg'),(c,'g-carb'),(o,'g-other')]
     return '<div class="plate-bar">' + ''.join(f'<i class="{k}" style="flex:{w}"></i>' for w,k in segs if w) + '</div>'
 def legend(p=0, v=0, c=0, o=0):
-    items = [('Protein',p,'var(--g-protein)'),('Veg',v,'var(--g-veg)'),('Carbs',c,'var(--g-carb)'),('Other',o,'var(--g-other)')]
-    return '<div class="legend-row">' + ''.join(f'<span style="--sw:{col}">{n} {w}%</span>' for n,w,col in items if w) + '</div>'
+    items = [('Protein',p,'g-protein'),('Veg',v,'g-veg'),('Carbs',c,'g-carb'),('Other',o,'g-other')]
+    return '<div class="legend-row">' + ''.join(f'<span class="{cls}">{n} {w}%</span>' for n,w,cls in items if w) + '</div>'
 def dots(pattern):
     return '<div class="dots">' + ''.join(f'<i class="{"on" if x else ""}{" now" if i==len(pattern)-1 else ""}"></i>' for i,x in enumerate(pattern)) + '</div>'
 
@@ -55,21 +59,21 @@ today_body = f'''
 TODAY = page(today_top, today_body, 'today')
 
 # ---------- 2. Gym: when did you go ----------
-gym_modal = f'''<div class="modal mk"><div class="sheet"><h3>Gym<small>Monday, November 9</small></h3>
+gym_modal = f'''<div class="modal"><div class="sheet"><h3>Gym<small>Monday, November 9</small></h3>
 <div class="eyebrow" style="margin-top:.9rem">When did you go?</div>
-<div class="big3"><div class="bigbtn">{ic("sun")}Morning<small>before 12</small></div><div class="bigbtn">{ic("dusk")}Afternoon<small>12 to 5</small></div><div class="bigbtn on">{ic("moon")}Evening<small>after 5</small></div></div>
+<div class="big3"><button class="bigbtn">{ic("sun")}Morning<small>before 12</small></button><button class="bigbtn">{ic("dusk")}Afternoon<small>12 to 5</small></button><button class="bigbtn" aria-pressed="true">{ic("moon")}Evening<small>after 5</small></button></div>
 <label class="field">Note<input type="text" placeholder="Optional. What did you do?"></label>
 <div class="btn-row" style="margin-top:1rem"><button class="btn" style="flex:1">Save</button><button class="btn danger">Remove today's log</button></div></div></div>'''
 GYM = page(today_top, today_body, 'today', gym_modal)
 
 # ---------- 3. Add a meal ----------
-def tile(name, hint, letter, color, level):
+def tile(name, hint, letter, group, level):
     word = ['None','Some','Half','Most'][level]
     pips = ''.join(f'<i class="{"f" if i<level else ""}"></i>' for i in range(3))
-    return f'<div class="ptile{" on" if level else ""}" data-g="{letter}" style="--sw:{color}"><div class="top">{name}<em>{letter}</em></div><div class="sub" style="color:var(--ink-3);font-size:.76rem;margin-top:.1rem">{hint}</div><div class="pips">{pips}</div><small>{word}</small></div>'
-meal_modal = f'''<div class="modal mk"><div class="sheet"><h3>Breakfast<small>Tap a food group to change its share of the plate</small></h3>
-<div class="recent"><span class="on">Protein shake</span><span>Eggs and toast</span><span>Oats and banana</span></div>
-<div class="tiles">{tile("Protein","eggs, dal, shake","P","var(--g-protein)",3)}{tile("Veg","vegetables, fruit","V","var(--g-veg)",0)}{tile("Carbs","rice, roti, bread","C","var(--g-carb)",1)}{tile("Other","oil, sweets, drinks","O","var(--g-other)",0)}</div>
+    return f'<button class="ptile g-{group}{" on" if level else ""}"><span class="top">{name}<em>{letter}</em></span><span class="eg">{hint}</span><span class="pips">{pips}</span><small>{word}</small></button>'
+meal_modal = f'''<div class="modal"><div class="sheet"><h3>Breakfast<small>Tap a food group to change its share of the plate</small></h3>
+<div class="recent"><button aria-pressed="true">Protein shake</button><button>Eggs and toast</button><button>Oats and banana</button></div>
+<div class="tiles">{tile("Protein","eggs, dal, shake","P","protein",3)}{tile("Veg","vegetables, fruit","V","veg",0)}{tile("Carbs","rice, roti, bread","C","carb",1)}{tile("Other","oil, sweets, drinks","O","other",0)}</div>
 <div class="live">{bar(p=75,c=25)}{legend(p=75,c=25)}</div>
 <label class="field">What did you eat?<input type="text" value="Protein shake" placeholder="Optional"></label>
 <div class="btn-row" style="margin-top:1rem"><button class="btn" style="flex:1">Save meal</button><button class="btn ghost">I skipped it</button></div></div></div>'''
@@ -90,7 +94,7 @@ for day in range(1, 31):
     cells += f'<div class="{cls}">{inner}</div>'
 habit_body = f'''
 <div class="eyebrow" style="margin-top:.5rem">Review</div><h1 class="page-title">Your days</h1>{seg("Habits")}
-<div class="pick"><span class="on">Gym</span><span>Read 20 minutes</span></div>
+<div class="pick"><button aria-pressed="true">Gym</button><button>Read 20 minutes</button></div>
 <div class="stats" style="margin-top:1rem">
 <div class="stat"><div class="n">6 of 9</div><div class="l">Days this month</div></div>
 <div class="stat"><div class="n">5 days</div><div class="l">This week (goal 4)</div></div>
@@ -113,7 +117,7 @@ for i,(d,vals) in enumerate(days):
     if vals is None:
         cols += f'<div class="col"><div class="none"></div><div class="dl{now}">{d}</div></div>'; continue
     p,v,c,o = vals
-    segs = ''.join(f'<i style="height:calc({w}% - 2px);background:var({var})"></i>' for w,var in [(p,'--g-protein'),(v,'--g-veg'),(c,'--g-carb'),(o,'--g-other')] if w)
+    segs = ''.join(f'<i class="{cls}" style="height:calc({w}% - 2px)"></i>' for w,cls in [(p,'g-protein'),(v,'g-veg'),(c,'g-carb'),(o,'g-other')] if w)
     cols += f'<div class="col"><div class="stack">{segs}</div><div class="dl{now}">{d}</div></div>'
 diet_body = f'''
 <div class="eyebrow" style="margin-top:.5rem">Review</div><h1 class="page-title">Your days</h1>{seg("Diet")}
@@ -130,10 +134,10 @@ diet_body = f'''
 DIET = page(review_top, diet_body, 'review')
 
 # ---------- 6. Add habit ----------
-add_modal = f'''<div class="modal mk"><div class="sheet"><h3>New habit</h3>
+add_modal = f'''<div class="modal"><div class="sheet"><h3>New habit</h3>
 <label class="field" style="margin-top:.2rem">What do you want to track?<input type="text" value="Gym"></label>
-<div class="chipset"><span class="on">Gym</span><span>Walk</span><span>Read</span><span>Stretch</span><span>Water</span><span>Meditate</span></div>
-<div class="rowline" style="margin-top:.9rem"><div><b>Track time of day</b><small>Morning, afternoon or evening when you log it</small></div><div class="switch"></div></div>
+<div class="chipset"><button aria-pressed="true">Gym</button><button>Walk</button><button>Read</button><button>Stretch</button><button>Water</button><button>Meditate</button></div>
+<div class="rowline" style="margin-top:.9rem"><div><b>Track time of day</b><small>Morning, afternoon or evening when you log it</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Track time of day"></button></div>
 <div class="rowline"><div><b>Weekly goal</b><small>Optional. Shown in Review, never as a streak</small></div><div class="stepper"><b>–</b><span>4</span><b>+</b></div></div>
 <div class="btn-row" style="margin-top:1rem"><button class="btn" style="flex:1">Add habit</button><button class="btn ghost">Cancel</button></div></div></div>'''
 ADD = page(today_top, today_body, 'today', add_modal)

@@ -36,7 +36,7 @@ Added during planning (small, but needed for usability): **past days can be logg
 
 ## Design
 
-Mock screens (light) and dark variants live in [`design/`](design/). The mock source is in [`design/mock/`](design/mock/) and reuses the app's real stylesheet, so the CSS can be lifted into the app.
+Mock screens (light) and dark variants live in [`design/`](design/). The generator in [`design/mock/`](design/mock/) builds them from the app's real stylesheet (`assets/styles.css`), so they double as a visual test: run `gen.py` and `render.js` and compare with the images here to check the design still matches.
 
 | Screen | Image |
 |---|---|
