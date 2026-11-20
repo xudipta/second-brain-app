@@ -294,3 +294,40 @@ test('delete removes the habit and only its check-ins, and can be undone', () =>
   assert.equal(state.habitLogs.length, 3);
   T.restoreHabit({ habits: [], habitLogs: [] }, snap); // restoring into an empty vault does not throw
 });
+
+// ---------- meal helpers for the screens ----------
+test('cycleLevel goes None, Some, Half, Most and back to None', () => {
+  assert.deepEqual([0, 1, 2, 3].map(T.cycleLevel), [1, 2, 3, 0]);
+  assert.equal(T.cycleLevel(undefined), 1);
+  assert.equal(T.cycleLevel(99), 0);
+});
+test('shareText lists the groups above zero in the fixed order', () => {
+  assert.equal(T.shareText({ protein: 48, veg: 17, carbs: 35, other: 0 }), 'Protein 48%, Veg 17%, Carbs 35%');
+  assert.equal(T.shareText({ protein: 0, veg: 0, carbs: 0, other: 100 }), 'Other 100%');
+  assert.equal(T.shareText({ protein: 0, veg: 0, carbs: 0, other: 0 }), '');
+  assert.equal(T.shareText(null), '');
+});
+test('mealLabel: the note as typed, otherwise the groups', () => {
+  assert.equal(T.mealLabel(mk('2026-11-09', 'lunch', { protein: 1 }, { note: '  Dal  and rice  \nsecond line' })), 'Dal  and rice');
+  assert.equal(T.mealLabel(mk('2026-11-09', 'lunch', { protein: 2, carbs: 1 })), 'Protein, Carbs');
+  assert.equal(T.mealLabel(mk('2026-11-09', 'lunch', { veg: 1 }, { note: '   ' })), 'Veg');
+});
+test('recentMeals: distinct, newest first, capped, skipped left out', () => {
+  const a = mk('2026-11-01', 'breakfast', { protein: 3 }, { note: 'Shake' }); a.at = 10;
+  const b = mk('2026-11-02', 'breakfast', { protein: 3 }, { note: 'Shake' }); b.at = 20;     // same as a: only the newest is kept
+  const c = mk('2026-11-02', 'lunch', { veg: 2 }, { note: 'Salad' }); c.at = 15;
+  const d = mk('2026-11-03', 'lunch', { veg: 2, protein: 1 }, { note: 'Salad' }); d.at = 5;   // same note, different portions: distinct
+  const e = mk('2026-11-03', 'snack', {}, { skipped: true }); e.at = 99;
+  const r = T.recentMeals([a, b, c, d, e], 6);
+  assert.deepEqual(r.map((m) => [m.note, m.date]), [['Shake', '2026-11-02'], ['Salad', '2026-11-02'], ['Salad', '2026-11-03']]);
+  assert.deepEqual(r[0].levels, { protein: 3, veg: 0, carbs: 0, other: 0 });
+  const many = Array.from({ length: 10 }, (_, i) => { const m = mk('2026-11-05', 'lunch', { veg: 1 }, { note: 'Meal ' + i }); m.at = i; return m; });
+  assert.equal(T.recentMeals(many, 6).length, 6);
+  assert.equal(T.recentMeals(many).length, 6);
+  assert.equal(T.recentMeals(many)[0].note, 'Meal 9');
+  assert.deepEqual(T.recentMeals([]), []);
+});
+test('recentMeals returns copies, so editing one never changes a stored meal', () => {
+  const a = mk('2026-11-01', 'lunch', { veg: 1 }); const r = T.recentMeals([a]);
+  r[0].levels.veg = 3; assert.equal(a.levels.veg, 1);
+});

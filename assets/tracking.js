@@ -192,6 +192,28 @@
     return { percent: byGroup(T.roundTo100(GROUPS.map((g, i) => sum(per.map((p) => p.avg[i])) / per.length))), daysLogged: per.length };
   };
 
+  // ---- meal helpers for the screens ----
+  const GROUP_LABEL = { protein: 'Protein', veg: 'Veg', carbs: 'Carbs', other: 'Other' };
+  T.GROUP_LABEL = GROUP_LABEL;
+  // One tap on a portion tile: None, Some, Half, Most, then back to None.
+  T.cycleLevel = (n) => (level(n) + 1) % 4;
+  // "Protein 48%, Veg 17%, Carbs 35%": the groups above zero, in the fixed order. Used on screen and for screen readers.
+  T.shareText = (percent) => GROUPS.filter((g) => percent && percent[g] > 0).map((g) => `${GROUP_LABEL[g]} ${percent[g]}%`).join(', ');
+  // A short name for a meal on a chip: its note as typed (first line), or the groups it contains.
+  T.mealLabel = (meal) => {
+    const first = String(meal.note || '').split('\n')[0].trim();
+    return first || GROUPS.filter((g) => meal.levels[g] > 0).map((g) => GROUP_LABEL[g]).join(', ');
+  };
+  // The most recent distinct meals (same note and same portions), newest first, for the "recent" chips. Skipped meals are left out.
+  T.recentMeals = (meals, limit) => {
+    const seen = new Set(), out = [];
+    meals.filter((m) => !m.skipped && total(m.levels) > 0).sort((a, b) => b.at - a.at || (a.date < b.date ? 1 : -1)).forEach((m) => {
+      const key = m.note + '|' + GROUPS.map((g) => m.levels[g]).join(',');
+      if (!seen.has(key) && out.length < (limit || 6)) { seen.add(key); out.push({ note: m.note, levels: Object.assign({}, m.levels), slot: m.slot, date: m.date }); }
+    });
+    return out;
+  };
+
   // ---- habit stats (Review) ----
   // `today` is the current day. Nothing here is a streak.
   T.habitStats = (habit, logs, today) => {
