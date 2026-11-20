@@ -36,6 +36,13 @@ Limits: it does not protect against malware on your device, someone watching you
 ## Changing questions
 Edit `assets/templates.js`, but only after the change is sourced in `second-brain/SOURCES.md`, and mirror the citation in `window.SOURCES` in the same file. No source, no question.
 
+## Tests
+Unit tests for the tracking rules live in `tests/` and need nothing installed beyond Node 20 or later:
+
+```sh
+node tests/run.js
+```
+
 ## Run locally
 ```sh
 python3 -m http.server 8000   # then open http://localhost:8000
