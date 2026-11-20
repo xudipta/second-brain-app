@@ -22,6 +22,11 @@
   let dirty = false, timer = null, writing = Promise.resolve();
   const V = { state: null, onError: () => {} };
 
+  // Everything the app keeps. A vault saved by an older release may lack some keys; they are filled in as empty lists.
+  const LISTS = ['entries', 'tasks', 'habits', 'habitLogs', 'meals'];
+  const blank = () => ({ entries: [], draft: null, tasks: [], habits: [], habitLogs: [], meals: [] });
+  const complete = (state) => { const s = state && typeof state === 'object' ? state : {}; LISTS.forEach((k) => { if (!Array.isArray(s[k])) s[k] = []; }); if (!('draft' in s)) s.draft = null; return s; };
+
   // ---- encoding ----
   const b64 = (buf) => {
     const a = new Uint8Array(buf); let s = '';
@@ -108,7 +113,7 @@
     const k = await newDeviceKey();
     await keyPut(k);
     key = k; mode = 'device'; salt = null;
-    V.state = initial || { entries: [], draft: null, tasks: [] };
+    V.state = complete(initial || blank());
     await writeNow();
     dropLegacy(); // only after the encrypted copy is safely written
   };
@@ -117,12 +122,12 @@
     if (!rec || rec.mode !== 'device') throw new Error('not a device vault');
     const k = await keyGet();
     if (!k) throw new Error('nokey');
-    V.state = await open(k, rec); key = k; mode = 'device';
+    V.state = complete(await open(k, rec)); key = k; mode = 'device';
   };
   V.create = async (pass, initial) => {
     salt = crypto.getRandomValues(new Uint8Array(16)); iter = ITERATIONS;
     key = await derive(pass, salt, iter); mode = 'pass';
-    V.state = initial || { entries: [], draft: null, tasks: [] };
+    V.state = complete(initial || blank());
     await writeNow();
     dropLegacy();
   };
@@ -130,7 +135,7 @@
     const rec = record();
     const s = unb64(rec.salt), k = await derive(pass, s, rec.iter || ITERATIONS);
     const state = await open(k, rec); // wrong passphrase throws here
-    salt = s; iter = rec.iter || ITERATIONS; key = k; mode = 'pass'; V.state = state;
+    salt = s; iter = rec.iter || ITERATIONS; key = k; mode = 'pass'; V.state = complete(state);
   };
   V.lock = async () => { // passphrase mode only
     await V.flush();
@@ -173,7 +178,7 @@
   // With a passphrase: encrypted with a key made from that passphrase (works in either mode).
   // Without one: in passphrase mode it is encrypted with the vault's own key; in device mode it is plain JSON.
   V.exportBackup = async (pass) => {
-    const data = { entries: V.state.entries, tasks: V.state.tasks || [] };
+    const data = {}; LISTS.forEach((k) => { data[k] = V.state[k] || []; });
     if (pass) {
       const s = crypto.getRandomValues(new Uint8Array(16)), k = await derive(pass, s, ITERATIONS), sealed = await seal(k, data);
       return JSON.stringify(Object.assign({ v: 1, kind: 'backup', kdf: 'PBKDF2-SHA256', iter: ITERATIONS, salt: b64(s) }, sealed), null, 2);
@@ -181,24 +186,25 @@
     if (mode === 'pass') return JSON.stringify(passEnvelope(await seal(key, data), { kind: 'backup' }), null, 2);
     return JSON.stringify(data, null, 2);
   };
+  // The lists a backup carries; any that an older backup lacks (tasks, habits, meals) come back empty.
+  const lists = (d) => { const o = {}; LISTS.forEach((k) => { o[k] = d && Array.isArray(d[k]) ? d[k] : []; }); return o; };
   V.parseBackup = (text) => {
     const data = JSON.parse(text);
-    if (Array.isArray(data)) return { plain: { entries: data, tasks: [] } };          // oldest plain backups: a bare list of entries
-    if (data && Array.isArray(data.entries) && !data.ct) return { plain: { entries: data.entries, tasks: data.tasks || [] } };
+    if (Array.isArray(data)) return { plain: lists({ entries: data }) };               // oldest plain backups: a bare list of entries
+    if (data && Array.isArray(data.entries) && !data.ct) return { plain: lists(data) };
     if (data && data.v === 1 && data.kind === 'backup' && data.ct) return { file: data };
     throw new Error('not a backup');
   };
   V.sameKeyAs = (file) => mode === 'pass' && !!key && !!salt && file.salt === b64(salt) && (file.iter || ITERATIONS) === iter;
   V.openBackup = async (file, pass) => {
     const k = pass == null && V.sameKeyAs(file) ? key : await derive(pass, unb64(file.salt), file.iter || ITERATIONS);
-    const data = await open(k, file);
-    return { entries: data.entries || [], tasks: data.tasks || [] }; // backups made before to-dos existed have no tasks
+    return lists(await open(k, file));
   };
   V.createFromBackup = async (file, pass) => {
     const k = await derive(pass, unb64(file.salt), file.iter || ITERATIONS);
     const data = await open(k, file);
     salt = unb64(file.salt); iter = file.iter || ITERATIONS; key = k; mode = 'pass';
-    V.state = { entries: data.entries || [], draft: null, tasks: data.tasks || [] };
+    V.state = Object.assign(blank(), lists(data));
     await writeNow(); dropLegacy();
   };
 

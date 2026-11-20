@@ -197,9 +197,14 @@
   // ====================== VIEWS ======================
 
   // ====================== TO-DOS ======================
-  const Tk = window.Tasks;
+  const Tk = window.Tasks, Tr = window.Tracking;
   const getTasks = () => { if (!V.state) return []; return V.state.tasks || (V.state.tasks = []); };
   const saveTasks = () => V.touch(0);
+  // Habits, check-ins and meals (see assets/tracking.js). A vault saved before they existed simply has none.
+  const getHabits = () => { if (!V.state) return []; return V.state.habits || (V.state.habits = []); };
+  const getHabitLogs = () => { if (!V.state) return []; return V.state.habitLogs || (V.state.habitLogs = []); };
+  const getMeals = () => { if (!V.state) return []; return V.state.meals || (V.state.meals = []); };
+  const saveTracking = () => V.touch(0);
   let shownDay = today();            // the day the screen was drawn for; used to redraw after midnight
   const addState = { text: '', tomorrow: false };
   const shortDay = (s) => { try { return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).format(parseDate(s)); } catch (e) { return s; } };
@@ -534,7 +539,7 @@
         row('download', 'Export all as .zip', hasData ? `${plural(all.length, 'note')} in entries/, daily to-dos in todos/` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: hasData ? null : true }),
         row('download', 'Backup (.json)', V.currentMode() === 'pass' ? 'Encrypted with your passphrase' : 'Optionally protected by its own passphrase', { onclick: backup, disabled: hasData ? null : true }),
         h('label', { class: 'row-item', style: 'position:relative' },
-          h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds notes and to-dos from a .json backup')),
+          h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds notes, to-dos, habits and meals from a .json backup')),
           h('input', { type: 'file', accept: 'application/json,.json', onchange: restore, style: 'position:absolute;inset:0;opacity:0;cursor:pointer', 'aria-label': 'Restore a backup file' }))),
       h('p', { class: 'sub', style: 'margin-top:.6rem' }, 'The .zip and .md exports are plain readable files, because they are meant for your second-brain repo. Treat them accordingly. Clearing browser data deletes your entries, so back up now and then.'),
       h('div', { class: 'section' }, h('h2', null, 'Security')),
@@ -586,8 +591,14 @@
     const tk = getTasks(), tids = new Set(tk.map((t) => t.id));
     const addT = (data.tasks || []).map(Tk.normalize).filter((t) => t && !tids.has(t.id));
     addT.forEach((t) => tk.push(t)); saveTasks();
-    return { notes: add.length, tasks: addT.length };
+    const tracked = Tr.mergeTracking(V.state, data); saveTracking();
+    return { notes: add.length, tasks: addT.length, habits: tracked.habits, logs: tracked.logs, meals: tracked.meals };
   }
+  const joinList = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
+  const restoredMessage = (n) => {
+    const parts = [[n.notes, 'note'], [n.tasks, 'task'], [n.habits, 'habit'], [n.logs, 'check-in'], [n.meals, 'meal']].filter(([c]) => c > 0).map(([c, w]) => plural(c, w));
+    return parts.length ? `Restored ${joinList(parts)}.` : 'Nothing new to restore.';
+  };
   async function restore(ev) {
     const input = ev.target, file = input.files[0]; if (!file) return;
     try {
@@ -601,7 +612,7 @@
         incoming = await V.openBackup(parsed.file, pass);
       }
       const n = mergeData(incoming);
-      toast(`Restored ${plural(n.notes, 'note')} and ${plural(n.tasks, 'task')}.`); moreView();
+      toast(restoredMessage(n)); moreView();
     } catch (e) { toast('Could not restore: wrong passphrase or not a valid backup.'); }
     input.value = '';
   }
