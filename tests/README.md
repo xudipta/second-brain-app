@@ -39,5 +39,7 @@ Rules are from [`docs/habits-and-meals/PLAN.md`](../docs/habits-and-meals/PLAN.m
 | Habits can be reordered, archived, deleted, restored | "reorderHabit", "archive ...", "delete ..." | `habits` |
 | Past days can be logged or fixed | "month calendar ...", "dayNotes ...", "mealDays ..." | `review-habits`, `review-diet` |
 | Carry-over of to-dos | `tasks.test.js` | `todos-notes` |
-| Every control has a name; keyboard-only flows | | `a11y` |
+| Every control has a name; keyboard-only flows; sources page | | `a11y` |
+| Update keeps data, new install is empty, offline | | `rollout` |
+| A year of data stays fast | | `perf-year` |
 | Encryption: device key, passphrase lock, tampering | | `vault`, `lock` |

@@ -117,9 +117,27 @@ window.SOURCES = {
   ]
 };
 
+// Habits and meals tracker (not an interview template): what each number is based on, and what is the app's own choice.
+window.SOURCES_TRACKER = {
+  label: 'Habits and meals',
+  intro: 'The Habits and Diet panels in Review count what you logged. They do not score you. Each measure is either tied to a source below or marked as the app\'s own choice.',
+  items: [
+    'Back the day after a miss: James Clear, Atomic Habits (2018), "never miss twice"; Lally, van Jaarsveld, Potts & Wardle, European Journal of Social Psychology 40(6), 2010, where a single missed day did not appear to hurt habit formation. The count itself (missed days followed by a logged day) is the app\'s own measure.',
+    'Tracking a habit: Clear, Atomic Habits, "make it satisfying" and habit tracking. The seven dots and the calendar are the app\'s way of showing it.',
+    'Usual time of day: Wood & Neal, Psychological Review 114(4), 2007, on stable context cues and automaticity. The app only reports the most common time you logged ("Mixed" on a tie).'
+  ],
+  own: [
+    'No streaks, by design: a streak punishes a miss, and the source above says one miss matters little. An optional weekly goal is shown only in Review.',
+    'Morning is before 12:00, afternoon 12:00 to 16:59, evening from 17:00, in your device\'s time. These cut-offs are the app\'s choice.',
+    'The plate is rough portions (None, Some, Half, Most) that you choose for Protein, Veg, Carbs and Other. It is not nutrition facts: no calories, macros, targets or advice, and no source is claimed for what a good plate is.',
+    'Averages count only days with a logged meal. Days with none are left out, not counted as zero.'
+  ]
+};
+
 window.SOURCES_LIMITS = [
   'Sources are cited from memory of the published works; check them before relying on any claim.',
   'Evidence strength varies. Retrieval practice and implementation intentions have strong support. Gratitude and Three Good Things effects are modest and replications are mixed. Seneca is a practice, not a study.',
   "Fogg's and Clear's books are popular syntheses with limited direct trials of their specific methods; the Lally and Wood & Neal papers are the stronger evidence.",
+  'The Lally study followed 96 volunteers for 84 days, and the one-missed-day finding is a modelling result, not proof for every person or habit.',
   'Not included on purpose: the "Feynman technique" (popular, but no primary source from Feynman), and productivity or journaling formats with no research or primary text behind them.'
 ];

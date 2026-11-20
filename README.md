@@ -15,6 +15,13 @@ An installable web app for the [second-brain](https://github.com/xudipta/second-
 - There are no reminders or notifications: a static site cannot send them reliably on every phone.
 - The logic is in `assets/tasks.js` (pure functions, no DOM).
 
+## Habits and meals: data and rules
+- Stored in the same encrypted vault and in backups, as three lists: `habits` (name, optional weekly goal 1 to 7, whether it tracks time of day, archived or not), `habitLogs` (one per habit per day: date, time of day, note) and `meals` (one per slot per day: Protein, Veg, Carbs, Other each None, Some, Half or Most, or skipped, plus a note). A vault or backup made before these existed opens and restores unchanged.
+- Rules (all in `assets/tracking.js`, pure functions): time of day is morning before 12:00, afternoon 12:00 to 16:59, evening from 17:00. A meal's shares are each group's level divided by the total; percentages are rounded so they always add to 100. A day's plate is the plain average of that day's logged meals, a range's plate the average of days that have meals (empty days are not zeros), and skipped meals are never averaged. The full list is in [`docs/habits-and-meals/PLAN.md`](docs/habits-and-meals/PLAN.md).
+- Review's Habits numbers (days this month, this week against the goal, usual time, back the day after a miss) are plain counts of what you logged, with no streaks. Where each one comes from, and which parts are this app's own choice, is on the **Why these questions** page under *Habits and meals*, with links from both Review panels.
+- A new install shows an "Add a habit" prompt and the four meal slots, and logs nothing until you act. Updating an installed copy keeps all data: the service worker only replaces its own cache.
+- Tested with a year of data (three habits and four meals every day, plus to-dos): every screen draws in well under 100 ms on the test machine (`tests/e2e/perf-year.e2e.js`).
+
 ## How it works
 - Note types: idea, learning, session, journal, habit. The questions are copied from `second-brain/templates/` (see `assets/templates.js`), each with the framework it comes from shown under the question.
 - Skip any question; skipped questions are left out of the entry.

@@ -647,7 +647,8 @@
         logged.length ? [h('thead', null, h('tr', null, h('th', null, 'Day'), h('th', null, 'Time of day'), h('th', null, 'Note'))),
           h('tbody', null, logged.map((c) => { const l = logOn(c.date); return h('tr', null, h('td', null, cellDay(c.date)), h('td', null, l.part && hb.trackTime ? PART_LABEL[l.part] : ''), h('td', null, l.note)); }))] : null),
       hb.trackTime ? [h('div', { class: 'section' }, h('h2', null, 'Time of day'), h('span', { class: 'count-chip' }, counts.total ? `${plural(counts.total, 'day')} with a time` : '')),
-        Tr.PARTS.map((k) => h('div', { class: 'hbar' }, h('span', { class: 't' }, ic(PART_ICON[k]), PART_LABEL[k]), h('span', { class: 'tr', 'aria-hidden': 'true' }, h('i', { style: `width:${counts.total ? Math.round(counts[k] / counts.total * 100) : 0}%` })), h('b', null, counts[k])))] : null);
+        Tr.PARTS.map((k) => h('div', { class: 'hbar' }, h('span', { class: 't' }, ic(PART_ICON[k]), PART_LABEL[k]), h('span', { class: 'tr', 'aria-hidden': 'true' }, h('i', { style: `width:${counts.total ? Math.round(counts[k] / counts.total * 100) : 0}%` })), h('b', null, counts[k])))] : null,
+      h('p', { class: 'foot' }, 'Plain counts of what you logged. ', h('a', { href: '#/about/tracker' }, 'Where these numbers come from')));
   }
 
   // ====================== REVIEW: DIET ======================
@@ -699,7 +700,7 @@
           h('span', { class: 'd' }, dayChip(d, t0)), pl ? plateBar(pl.percent) : h('span', { class: 'skip', style: 'font-size:.84rem' }, 'Skipped'), notes.length ? h('small', null, notes.join(' · ')) : null);
       }) : h('p', { class: 'empty-line' }, `No meals logged in the last ${dietRange} days.`),
       days.length > shown.length ? h('button', { class: 'btn secondary block', type: 'button', style: 'margin-top:1rem', onclick: () => { dietMore++; redrawDiet(); } }, 'Show older days') : null,
-      h('p', { class: 'foot' }, 'Rough portions you chose for each plate, not nutrition facts.'));
+      h('p', { class: 'foot' }, 'Rough portions you chose for each plate, not nutrition facts. ', h('a', { href: '#/about/tracker' }, 'Where these numbers come from')));
   }
 
   // One day's meals, to add, edit, skip or delete (for any day up to today).
@@ -1052,10 +1053,16 @@
           h('h3', null, t.label),
           h('p', { class: 'fw' }, 'Frameworks: ' + t.frameworks + '.'),
           h('ul', null, (window.SOURCES[key] || []).map((s) => h('li', null, s))))),
+      window.SOURCES_TRACKER ? h('div', { class: 'src-card', id: 'src-tracker' },
+        h('h3', null, window.SOURCES_TRACKER.label),
+        h('p', { class: 'fw' }, window.SOURCES_TRACKER.intro),
+        h('ul', null, window.SOURCES_TRACKER.items.map((s) => h('li', null, s))),
+        h('p', { class: 'fw', style: 'margin-top:.8rem' }, h('strong', null, 'The app\'s own choices')),
+        h('ul', null, window.SOURCES_TRACKER.own.map((s) => h('li', null, s)))) : null,
       h('div', { class: 'section' }, h('h2', null, 'Honest limits')),
       h('div', { class: 'note' }, h('ul', { style: 'margin:0' }, window.SOURCES_LIMITS.map((s) => h('li', null, s)))),
       h('p', { class: 'sub', style: 'margin-top:1rem' }, 'The small label under each question names the idea it comes from. "record" means the question only notes a fact.'));
-    if (focusType && T[focusType]) { const el = document.getElementById('src-' + focusType); if (el) el.scrollIntoView(); }
+    if (focusType && (T[focusType] || focusType === 'tracker')) { const el = document.getElementById('src-' + focusType); if (el) el.scrollIntoView(); }
   }
 
   // ====================== INTERVIEW ======================
