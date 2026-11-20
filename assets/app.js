@@ -228,7 +228,7 @@
   }
 
   // Redraw the Today screen without jumping to the top or replaying the entrance animation.
-  function redrawToday(focusKey) { const y = window.scrollY; quiet = true; todayView(); quiet = false; window.scrollTo(0, y); if (focusKey) focusByKey(focusKey); }
+  function redrawToday(...focusKeys) { const y = window.scrollY; quiet = true; todayView(); quiet = false; window.scrollTo(0, y); if (focusKeys.length) focusByKey(...focusKeys); }
   let quiet = false;
 
   function taskRow(t, t0) {
@@ -277,6 +277,7 @@
         h('button', { class: 'btn sm', onclick: askInstall }, 'Install'),
         h('button', { class: 'icon-btn', 'aria-label': 'Dismiss', onclick: () => { try { sessionStorage.setItem('sb.noinstall', '1'); } catch (e) { /* ignore */ } todayView(); } }, svg('close'))) : null,
       habitsSection(t0),
+      mealsSection(t0),
       v.carried.length ? [h('div', { class: 'section' }, h('h2', null, 'Carried over'), h('span', { class: 'count-chip' }, v.carried.length)), list(v.carried)] : null,
       h('div', { class: 'section' }, h('h2', null, 'Today'), h('span', { class: 'count-chip' }, v.planned.length || '')),
       v.planned.length ? list(v.planned) : h('p', { class: 'empty-line' }, total ? (openCount ? 'Nothing else planned for today.' : 'Everything planned is done.') : 'Nothing planned yet. Add your first task below. Whatever you do not finish carries over to the next day.'),
@@ -393,9 +394,9 @@
     return openSheet(`${hb.name}, ${dayLabel(date)}`, (close) => {
       const btns = Tr.PARTS.map((k) => h('button', { type: 'button', class: 'bigbtn', 'data-part': k, 'aria-pressed': String(part === k), onclick: () => { part = k; btns.forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-part') === part))); } },
         ic(PART_ICON[k]), PART_LABEL[k], h('small', null, PART_HINT[k])));
-      const save = () => { Tr.logHabit(getHabitLogs(), hb.id, date, { part: hb.trackTime ? part : null, note: note.value }, Date.now()); saveTracking(); after && after(); close(); };
+      const save = () => { Tr.logHabit(getHabitLogs(), hb.id, date, { part: hb.trackTime ? part : null, note: note.value }, Date.now()); saveTracking(); close(); after && after(); };
       const remove = () => {
-        const removed = Tr.unlogHabit(getHabitLogs(), hb.id, date); saveTracking(); after && after(); close();
+        const removed = Tr.unlogHabit(getHabitLogs(), hb.id, date); saveTracking(); close(); after && after();
         if (removed) toast(`${hb.name} unmarked for ${dayLabel(date)}.`, { label: 'Undo', run: () => { getHabitLogs().push(removed); saveTracking(); route(); } });
       };
       return h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); save(); } },
@@ -434,7 +435,7 @@
         if (!name) { err.textContent = 'Give the habit a name.'; nameIn.focus(); return; }
         if (editing) Tr.updateHabit(habit, { name, trackTime, weeklyGoal: goal });
         else getHabits().push(Tr.makeHabit(name, { trackTime, weeklyGoal: goal, order: Tr.nextOrder(getHabits()) }, today(), Date.now()));
-        saveTracking(); after && after(); close();
+        saveTracking(); close(); after && after();
       };
       return h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); submit(); } },
         h('h3', null, editing ? 'Edit habit' : 'New habit'),
@@ -443,7 +444,7 @@
         h('div', { class: 'rowline', style: 'margin-top:.9rem' }, h('div', null, h('b', null, 'Track time of day'), h('small', null, 'Morning, afternoon or evening when you log it')), sw),
         h('div', { class: 'rowline' }, h('div', null, h('b', null, 'Weekly goal'), h('small', null, 'Optional. Shown in Review, never as a streak')), h('div', { class: 'stepper' }, less, goalVal, more)),
         h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit', style: 'flex:1' }, editing ? 'Save' : 'Add habit'), h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'Cancel'),
-          editing ? h('button', { class: 'btn danger', type: 'button', onclick: () => { deleteHabit(habit, () => { if (after) after(); close(); }); } }, 'Delete') : null));
+          editing ? h('button', { class: 'btn danger', type: 'button', onclick: () => { deleteHabit(habit, () => { close(); if (after) after(); }); } }, 'Delete') : null));
     });
   }
 
@@ -483,6 +484,101 @@
             h('button', { class: 'btn sm secondary', type: 'button', 'aria-label': `Unarchive ${hb.name}`, onclick: () => { Tr.unarchiveHabit(all, hb); saveTracking(); redrawHabits('add-habit'); } }, 'Unarchive'),
             iconBtn('trash', `Delete ${hb.name}`, `del-${hb.id}`, () => deleteHabit(hb, () => redrawHabits('add-habit')))))))] : null,
       null);
+  }
+
+  // ====================== MEALS ======================
+  const SLOT_LABEL = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack', dinner: 'Dinner' };
+  const GROUP_CLASS = { protein: 'g-protein', veg: 'g-veg', carbs: 'g-carb', other: 'g-other' };
+  const GROUP_LETTER = { protein: 'P', veg: 'V', carbs: 'C', other: 'O' };
+  const GROUP_EG = { protein: 'eggs, dal, shake', veg: 'vegetables, fruit', carbs: 'rice, roti, bread', other: 'oil, sweets, drinks' };
+
+  // A bar split by food group, with a text alternative. The gap between segments and the legend keep colour from being the only signal.
+  const plateBar = (percent) => h('div', { class: 'plate-bar', role: 'img', 'aria-label': Tr.shareText(percent) || 'Nothing logged' },
+    Tr.GROUPS.filter((g) => percent[g] > 0).map((g) => h('i', { class: GROUP_CLASS[g], style: `flex:${percent[g]}` })));
+  const plateLegend = (percent) => h('div', { class: 'legend-row' }, Tr.GROUPS.filter((g) => percent[g] > 0).map((g) => h('span', { class: GROUP_CLASS[g] }, `${Tr.GROUP_LABEL[g]} ${percent[g]}%`)));
+
+  // The Meals section on Today: today's plate so far, and the four fixed slots.
+  function mealsSection(t0) {
+    const meals = getMeals(), eaten = meals.filter((m) => m.date === t0 && !m.skipped).length, plate = Tr.dayPlate(meals, t0);
+    const row = (slot) => {
+      const m = Tr.findMeal(meals, t0, slot), name = SLOT_LABEL[slot], lower = name.toLowerCase();
+      const open = () => mealSheet(slot, t0, () => redrawToday(`meal-${slot}`, `meal-add-${slot}`));
+      if (!m) {
+        return h('div', { class: 'meal' }, h('span', { class: 'lab' }, name), h('div', { class: 'mid' }),
+          h('button', { class: 'btn secondary add', type: 'button', 'aria-label': `Add ${lower}`, 'data-focus-key': `meal-add-${slot}`, onclick: open }, ic('plus'), 'Add'));
+      }
+      const shares = m.skipped ? null : Tr.mealShares(m.levels);
+      const label = m.skipped ? `Edit ${lower}, skipped` : `Edit ${lower}: ${Tr.shareText(shares)}${m.note ? '. ' + m.note : ''}`;
+      return h('div', { class: 'meal' }, h('span', { class: 'lab' }, name),
+        h('button', { class: 'mid', type: 'button', 'aria-label': label, 'data-focus-key': `meal-${slot}`, onclick: open },
+          m.skipped ? h('small', { class: 'skip' }, 'Skipped') : [plateBar(shares), m.note ? h('small', null, m.note) : null]),
+        h('span'));
+    };
+    return [
+      h('div', { class: 'section' }, h('h2', null, 'Meals'), eaten ? h('span', { class: 'count-chip' }, `${eaten} logged`) : null),
+      plate ? h('div', { class: 'day-plate' }, h('div', { class: 'cap' }, h('span', null, "Today's plate so far"), h('span', null, 'rough portions')), plateBar(plate.percent), plateLegend(plate.percent)) : null,
+      Tr.SLOTS.map(row)
+    ];
+  }
+
+  // The meal sheet: tap a food group to change its share of the plate, or copy a recent meal. Used for today and for past days.
+  function mealSheet(slot, date, after) {
+    const existing = Tr.findMeal(getMeals(), date, slot), name = SLOT_LABEL[slot], isToday = date === today();
+    const levels = Tr.cleanLevels(existing && !existing.skipped ? existing.levels : null);
+    const note = h('input', { type: 'text', maxlength: 200, value: existing ? existing.note : '', placeholder: 'Optional', autocomplete: 'off' });
+    return openSheet(`${name}, ${dayLabel(date)}`, (close) => {
+      const live = h('div', { class: 'sr-only', 'aria-live': 'polite' }, ''), preview = h('div', { class: 'live' });
+      const save = h('button', { class: 'btn', type: 'submit', style: 'flex:1' }, 'Save meal');
+      let chipEls = [];
+      const tiles = Tr.GROUPS.map((g) => {
+        const word = h('small', null, ''), pips = [0, 1, 2].map(() => h('i')), g1 = g;
+        const el = h('button', { type: 'button', class: `ptile ${GROUP_CLASS[g]}`, onclick: () => { levels[g1] = Tr.cycleLevel(levels[g1]); chipEls.forEach((c) => c.setAttribute('aria-pressed', 'false')); paint(g1); } },
+          h('span', { class: 'top' }, Tr.GROUP_LABEL[g], h('em', null, GROUP_LETTER[g])), h('span', { class: 'eg' }, GROUP_EG[g]), h('span', { class: 'pips' }, pips), word);
+        return { el, g, word, pips };
+      });
+      // Redraw the tiles and the live bar. `changed` is the tile just tapped, announced to screen readers.
+      function paint(changed) {
+        tiles.forEach(({ el, g, word, pips }) => {
+          const lv = levels[g];
+          el.classList.toggle('on', lv > 0); pips.forEach((p, i) => p.classList.toggle('f', i < lv)); word.textContent = Tr.LEVEL_WORDS[lv];
+          el.setAttribute('aria-label', `${Tr.GROUP_LABEL[g]}, ${Tr.LEVEL_WORDS[lv]}. Tap to change`);
+        });
+        const shares = Tr.mealShares(levels);
+        preview.replaceChildren(...(shares ? [plateBar(shares), plateLegend(shares)] : [h('p', { class: 'sub' }, 'Tap a food group to start the plate.')]));
+        save.disabled = !shares;
+        if (changed) live.textContent = `${Tr.GROUP_LABEL[changed]}, ${Tr.LEVEL_WORDS[levels[changed]]}. ${shares ? Tr.shareText(shares) : 'Nothing selected'}`;
+      }
+      const recents = Tr.recentMeals(getMeals(), 6);
+      const chips = recents.length ? h('div', { class: 'recent', role: 'group', 'aria-label': 'Recent meals' }, recents.map((r) => {
+        const b = h('button', { type: 'button', 'aria-pressed': 'false', title: Tr.mealLabel(r), onclick: () => {
+          Tr.GROUPS.forEach((g) => { levels[g] = r.levels[g]; }); note.value = r.note;
+          chipEls.forEach((c) => c.setAttribute('aria-pressed', 'false')); b.setAttribute('aria-pressed', 'true'); paint();
+        } }, h('span', { class: 'clip' }, Tr.mealLabel(r)));
+        return b;
+      })) : null;
+      chipEls = chips ? [...chips.children] : [];
+
+      // Save, skip or delete, then redraw; Undo puts back whatever was there before.
+      const commit = (meal, message) => {
+        if (!meal) return;
+        const prev = existing ? JSON.parse(JSON.stringify(existing)) : null;
+        Tr.setMeal(getMeals(), meal); saveTracking(); close(); after && after();
+        toast(message, { label: 'Undo', run: () => { const ms = getMeals(); if (prev) Tr.setMeal(ms, prev); else Tr.removeMeal(ms, date, slot); saveTracking(); route(); } });
+      };
+      const saveMeal = () => commit(Tr.makeMeal({ date, slot, levels, note: note.value, skipped: false }, Date.now()), `${name} saved.`);
+      const skipMeal = () => commit(Tr.makeMeal({ date, slot, note: note.value, skipped: true }, Date.now()), `${name} marked as skipped.`);
+      const deleteMeal = () => {
+        const prev = JSON.parse(JSON.stringify(existing)); Tr.removeMeal(getMeals(), date, slot); saveTracking(); close(); after && after();
+        toast(`${name} deleted.`, { label: 'Undo', run: () => { Tr.setMeal(getMeals(), prev); saveTracking(); route(); } });
+      };
+      paint();
+      return h('form', { class: 'sheet', onsubmit: (ev) => { ev.preventDefault(); if (!save.disabled) saveMeal(); } },
+        h('h3', null, name, h('small', null, (isToday ? '' : fullDay(date) + '. ') + 'Tap a food group to change its share of the plate')),
+        chips, h('div', { class: 'tiles' }, tiles.map((t) => t.el)), preview, live,
+        h('label', { class: 'field' }, 'What did you eat?', note),
+        h('div', { class: 'btn-row', style: 'margin-top:1rem' }, save, h('button', { class: 'btn ghost', type: 'button', onclick: skipMeal }, 'I skipped it'),
+          existing ? h('button', { class: 'btn danger', type: 'button', onclick: deleteMeal }, 'Delete meal') : null));
+    });
   }
 
   // --- close the day ---
