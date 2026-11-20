@@ -945,7 +945,8 @@
   // --- more ---
   function moreView() {
     shell({ top: title('More'), tab: 'more' });
-    const all = getEntries(), tk = getTasks(), hasData = all.length || tk.length;
+    const all = getEntries(), tk = getTasks(), ex = Tr.exportFiles(V.state);
+    const hasExport = all.length || tk.length || ex.files.length, hasBackup = hasExport || getHabits().length || getMeals().length;
     const row = (icon, head, text, attrs) => h(attrs.href ? 'a' : 'button', Object.assign({ class: 'row-item' }, attrs),
       h('div', { class: 'ico' }, svg(icon)), h('div', { class: 'txt' }, h('strong', null, head), h('span', null, text)), svg('chevron'));
     view(
@@ -954,8 +955,8 @@
       h('div', { class: 'rows' }, row('info', 'Why these questions', 'Where each question comes from, and its limits', { href: '#/about' })),
       h('div', { class: 'section' }, h('h2', null, 'Your data')),
       h('div', { class: 'rows' },
-        row('download', 'Export all as .zip', hasData ? `${plural(all.length, 'note')} in entries/, daily to-dos in todos/` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: hasData ? null : true }),
-        row('download', 'Backup (.json)', V.currentMode() === 'pass' ? 'Encrypted with your passphrase' : 'Optionally protected by its own passphrase', { onclick: backup, disabled: hasData ? null : true }),
+        row('download', 'Export all as .zip', hasExport ? `${plural(all.length, 'note')} in entries/, daily to-dos in todos/${ex.habitDays ? ', habits in habits/' : ''}${ex.mealDays ? ', meals in meals/' : ''}` : 'Nothing to export yet', { onclick: () => exportAll(), disabled: hasExport ? null : true }),
+        row('download', 'Backup (.json)', V.currentMode() === 'pass' ? 'Encrypted with your passphrase' : 'Optionally protected by its own passphrase', { onclick: backup, disabled: hasBackup ? null : true }),
         h('label', { class: 'row-item', style: 'position:relative' },
           h('div', { class: 'ico' }, svg('upload')), h('div', { class: 'txt' }, h('strong', null, 'Restore a backup'), h('span', null, 'Adds notes, to-dos, habits and meals from a .json backup')),
           h('input', { type: 'file', accept: 'application/json,.json', onchange: restore, style: 'position:absolute;inset:0;opacity:0;cursor:pointer', 'aria-label': 'Restore a backup file' }))),
@@ -988,13 +989,18 @@
   }
 
   function exportAll() {
-    const list = getEntries(), tk = getTasks(); if (!list.length && !tk.length) return;
+    const list = getEntries(), tk = getTasks(), tr = Tr.exportFiles(V.state);
+    if (!list.length && !tk.length && !tr.files.length) return;
     const files = list.map((e) => ({ name: entryPath(e, list), content: entryToMarkdown(e) }));
     let days = 0;
     if (tk.length) Tk.days(Tk.firstDay(tk), today()).forEach((d) => { const md = Tk.dayMarkdown(tk, d); if (md) { files.push({ name: `todos/${d.slice(0, 4)}/${d.slice(5, 7)}/${d}.md`, content: md + '\n' }); days++; } });
+    tr.files.forEach((f) => files.push(f));                       // habits/ and meals/, one file per day that has anything
     download(`second-brain-${today()}.zip`, 'application/zip', makeZip(files));
     markExported(list.map((e) => e.id));
-    toast(`Exported ${plural(list.length, 'note')} and ${plural(days, 'day')} of to-dos.`);
+    // Without habits or meals the message is the same as before.
+    if (!tr.files.length) { toast(`Exported ${plural(list.length, 'note')} and ${plural(days, 'day')} of to-dos.`); return; }
+    const parts = [list.length ? plural(list.length, 'note') : null, days ? `${plural(days, 'day')} of to-dos` : null, tr.habitDays ? `${plural(tr.habitDays, 'day')} of habits` : null, tr.mealDays ? `${plural(tr.mealDays, 'day')} of meals` : null].filter(Boolean);
+    toast(`Exported ${joinList(parts)}.`);
   }
   async function backup() {
     let pass; // undefined: use the vault's own key (passphrase mode)

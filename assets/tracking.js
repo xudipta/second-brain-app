@@ -214,6 +214,51 @@
     return out;
   };
 
+  // ---- export: daily markdown files for the zip ----
+  // Only the user's own words plus fixed headings. Check-in and meal notes are written exactly as typed.
+  const SLOT_NAME = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack', dinner: 'Dinner' };
+  const PORTION_WORD = ['none', 'some', 'half', 'most'];
+  const indent = (text) => text.split('\n').map((l) => '  ' + l).join('\n');
+
+  // habits/YYYY/MM/YYYY-MM-DD.md: the habits done that day, in the habits' order (archived ones too). '' when there are none.
+  // The time of day is added in brackets only for a habit that tracks it. A multi-line note is indented under its habit.
+  T.habitsDayMarkdown = (habits, logs, date) => {
+    const lines = [];
+    habits.slice().sort(byOrder).forEach((hb) => {
+      const log = T.findLog(logs, hb.id, date);
+      if (!log) return;
+      lines.push(`- [x] ${hb.name}${hb.trackTime && log.part ? ` (${log.part})` : ''}`);
+      if (log.note.trim()) lines.push(indent(log.note));
+    });
+    return lines.length ? `---\ndate: ${date}\ntype: habits\n---\n\n## Done\n${lines.join('\n')}\n` : '';
+  };
+
+  // meals/YYYY/MM/YYYY-MM-DD.md: each slot that day with its portions (groups at None are left out), or "Skipped", then the note.
+  T.mealsDayMarkdown = (meals, date) => {
+    const blocks = [];
+    SLOTS.forEach((slot) => {
+      const m = T.findMeal(meals, date, slot);
+      if (!m) return;
+      const lines = [`## ${SLOT_NAME[slot]}`];
+      lines.push(m.skipped ? 'Skipped' : GROUPS.filter((g) => m.levels[g] > 0).map((g) => `${GROUP_LABEL[g]}: ${PORTION_WORD[m.levels[g]]}`).join(', '));
+      if (m.note.trim()) lines.push(m.note);
+      blocks.push(lines.join('\n'));
+    });
+    return blocks.length ? `---\ndate: ${date}\ntype: meals\n---\n\n${blocks.join('\n\n')}\n` : '';
+  };
+
+  // The files to add to the zip, oldest day first, one per day that has anything, plus how many days of each.
+  // Nothing is produced when there are no check-ins or meals.
+  T.exportFiles = (state) => {
+    const habits = state.habits || [], meals = state.meals || [], known = new Set(habits.map((h) => h.id));
+    const logs = (state.habitLogs || []).filter((l) => known.has(l.habitId));
+    const where = (kind, d) => `${kind}/${d.slice(0, 4)}/${d.slice(5, 7)}/${d}.md`, files = [];
+    let habitDays = 0, mealDays = 0;
+    [...new Set(logs.map((l) => l.date))].sort().forEach((d) => { const md = T.habitsDayMarkdown(habits, logs, d); if (md) { files.push({ name: where('habits', d), content: md }); habitDays++; } });
+    [...new Set(meals.map((m) => m.date))].sort().forEach((d) => { const md = T.mealsDayMarkdown(meals, d); if (md) { files.push({ name: where('meals', d), content: md }); mealDays++; } });
+    return { files, habitDays, mealDays };
+  };
+
   // ---- Review: the diet panel ----
   // The notes of one day's meals in slot order, exactly as typed (empty ones are left out).
   T.dayNotes = (meals, date) => SLOTS.map((slot) => T.findMeal(meals, date, slot)).filter((m) => m && m.note.trim()).map((m) => m.note);
