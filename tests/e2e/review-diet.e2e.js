@@ -69,7 +69,7 @@ module.exports = { name: 'Review, Diet: average plate, chart, recent days, day v
   ok(await p.locator('a.drow:has-text("Mon 2") .skip').innerText() === 'Skipped', 'a day with only skipped meals says "Skipped" (and is not in the average)');
   await p.click('.seg button:has-text("7 days")');
   ok(!/should|recommend|target|healthy|too much|too little|goal/i.test(await p.locator('#app').innerText()), 'no advice, targets or judgement on the panel');
-  ok((await p.locator('.foot').innerText()) === 'Rough portions you chose for each plate, not nutrition facts.', 'the footnote is shown');
+  ok((await p.locator('.foot').innerText()).startsWith('Rough portions you chose for each plate, not nutrition facts.') && await p.locator('.foot a[href="#/about/tracker"]').count() === 1, 'the footnote is shown, with the link to the sources');
   // ===== the day view =====
   await p.click('a.drow:has-text("Sat 7")'); await p.waitForSelector('.meal');
   ok((await p.locator('.page-title').innerText()) === 'November 7' && (await p.locator('.eyebrow').first().innerText()).toLowerCase() === 'saturday' && await p.locator('.meal').count() === 4, 'the day view shows the date and the four slots');

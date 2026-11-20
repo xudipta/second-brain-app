@@ -118,7 +118,7 @@ Other requirements:
 
 ## Rollout
 
-Ships in small pull requests (see the issue order below). Nothing new appears until there is something to show: Today shows an "Add habit" prompt only. No data migration is needed because the new keys are optional.
+Ships in small pull requests (see the issue order below). Nothing is logged until you act: on a new install Today shows an "Add a habit" prompt and the four meal slots with an Add button each (the approved design), and Review shows an empty state with a link back to Today. No data migration is needed because the new keys are optional.
 
 ## Not in this release
 

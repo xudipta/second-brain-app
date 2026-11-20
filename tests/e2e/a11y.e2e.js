@@ -47,6 +47,12 @@ module.exports = { name: 'Accessibility: names on every control, keyboard-only f
   await audit('Review, Diet', '#/review/diet');
   await audit('Diet, one day', '#/review/diet/2026-11-05');
   await audit('More', '#/more');
+  await audit('About, tracker sources', '#/about/tracker');
+  ok(await p.locator('#src-tracker').count() === 1 && /own choices/i.test(await p.locator('#src-tracker').innerText()) && /never miss twice/i.test(await p.locator('#src-tracker').innerText()), 'the About page has the Habits and meals sources and marks the app\'s own choices');
+  await p.goto(U + '#/review/habits'); await p.waitForSelector('.cal');
+  await p.click('a:has-text("Where these numbers come from")'); await p.waitForSelector('#src-tracker'); ok(true, 'Review, Habits links to the sources');
+  await p.goto(U + '#/review/diet'); await p.waitForSelector('.wk');
+  ok(await p.locator('a:has-text("Where these numbers come from")').count() === 1, 'Review, Diet links to the sources');
 
   // sheets: habit time sheet, meal sheet, add habit
   await p.goto(U + '#/'); await p.waitForSelector('.page-title');
