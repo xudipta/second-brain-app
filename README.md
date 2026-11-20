@@ -5,7 +5,7 @@ An installable web app for the [second-brain](https://github.com/xudipta/second-
 ## Screens
 - **Today**: your to-do list for the day. Anything you don't finish **carries over** to the next day on its own and shows under "Carried over" with where it came from and how many days it has waited. Each carried task has **Do today**; tapping a task opens a sheet to edit it, move it (tomorrow or a date), drop it, or delete it (with undo). **Close the day** shows how the day went, lets you drop what you no longer want, and links to a journal note.
 - **Notes**: the interview notebook. A focused one-question-at-a-time screen with progress, Back/Skip/Next, autosave and a "Why this question?" panel, then a review step before saving. Search, filter by type, read, edit, delete (with undo).
-- **Review**: last seven days at a glance (tasks finished, share of the list completed, days with something done, longest-open task, a bar chart with a text table), then every day with what was done and left over. Tap a day to see exactly what was on the list, plus any notes from that day.
+- **Review**: a Tasks / Habits / Diet switch (Habits and Diet are coming). Tasks shows the last seven days at a glance (tasks finished, share of the list completed, days with something done, longest-open task, a bar chart with a text table), then every day with what was done and left over. Tap a day to see exactly what was on the list, plus any notes from that day.
 - **More**: export (.zip), backup/restore, security, install, and **Why these questions** (the sources, copied from second-brain's SOURCES.md).
 
 ## How the to-dos work

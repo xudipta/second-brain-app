@@ -338,6 +338,27 @@
 
   // --- review ---
   let reviewMore = 1; // pages of 30 days shown
+  // Review has three panels behind a switch. The one last used is remembered for the session, and the Review tab opens it.
+  let reviewPanel = 'tasks';
+  const REVIEW_PANELS = [['tasks', 'Tasks'], ['habits', 'Habits'], ['diet', 'Diet']];
+  const panelHref = (k) => (k === 'tasks' ? '#/review' : `#/review/${k}`);
+  function reviewHead(panel) {
+    reviewPanel = panel;
+    const tab = tabs.querySelector('a[data-tab=review]'); if (tab) tab.setAttribute('href', panelHref(panel));
+    return [
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Review'), h('h1', { class: 'page-title' }, 'Your days'),
+      h('div', { class: 'seg', role: 'group', 'aria-label': 'Review sections' }, REVIEW_PANELS.map(([k, label]) =>
+        h('button', { 'aria-pressed': String(k === panel), onclick: () => { if (k !== panel) location.hash = panelHref(k); } }, label)))
+    ];
+  }
+  // Habits and Diet are built in the next steps; until then each panel says what it will show.
+  function reviewSoon(panel) {
+    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
+    const [title, text] = panel === 'habits'
+      ? ['Habit tracking is on its way', 'Soon you will log habits on Today, and see here how many days you went, your usual time of day and a month calendar.']
+      : ['Meal tracking is on its way', 'Soon you will log meals on Today, and see here your average plate and how each day looked.'];
+    view(...reviewHead(panel), h('div', { class: 'empty' }, svg('review'), h('h3', null, title), h('p', null, text), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
+  }
   function barChart(per, t0) {
     const days = per.slice().reverse(); // oldest first
     const max = Math.max(1, ...days.map((p) => p.done.length + p.left.length));
@@ -363,7 +384,7 @@
     shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
     const t0 = today(), tasks = getTasks();
     if (!tasks.length) {
-      view(h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Review'), h('h1', { class: 'page-title' }, 'Your days'),
+      view(...reviewHead('tasks'),
         h('div', { class: 'empty' }, svg('review'), h('h3', null, 'Nothing to review yet'), h('p', null, 'Add tasks on Today. Each day will show up here with what you finished and what carried over.'), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
       return;
     }
@@ -371,8 +392,9 @@
     const first = Tk.firstDay(tasks) || t0, all = Tk.days(first, t0).map((d) => Tk.day(tasks, d)).filter((p) => p.done.length || p.left.length || p.dropped.length || p.added.length);
     const shown = all.slice(0, 30 * reviewMore);
     view(
-      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, 'Last 7 days'), h('h1', { class: 'page-title' }, 'Your days'),
-      h('div', { class: 'stats', style: 'margin-top:1.25rem' },
+      ...reviewHead('tasks'),
+      h('div', { class: 'eyebrow', style: 'margin-top:1.25rem' }, 'Last 7 days'),
+      h('div', { class: 'stats', style: 'margin-top:.5rem' },
         h('div', { class: 'stat' }, h('div', { class: 'n' }, r.done), h('div', { class: 'l' }, 'Tasks finished')),
         h('div', { class: 'stat' }, h('div', { class: 'n' }, r.rate == null ? '–' : Math.round(r.rate * 100) + '%'), h('div', { class: 'l' }, 'Of the tasks on your list')),
         h('div', { class: 'stat' }, h('div', { class: 'n' }, `${r.activeDays}/7`), h('div', { class: 'l' }, 'Days with something done')),
@@ -795,7 +817,7 @@
       case 'edit': return editView(arg);
       case 'entry': return entryView(arg);
       case 'notes': case 'entries': return notesView();
-      case 'review': return arg ? dayDetailView(arg) : reviewTab();
+      case 'review': return arg === 'habits' || arg === 'diet' ? reviewSoon(arg) : arg ? dayDetailView(arg) : reviewTab();
       case 'close': return closeView();
       case 'more': return moreView();
       case 'passphrase': return changePassView();

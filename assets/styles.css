@@ -274,4 +274,120 @@ pre.md { white-space: pre-wrap; overflow-wrap: anywhere; margin: .6rem 0 0; back
 #toast button { background: none; border: 0; color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: .2rem; }
 body.focus #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 @media (min-width: 900px) { #toast { bottom: 84px; } }
+/* ---------- Habits and meals: tokens and shared components ----------
+   Design: docs/habits-and-meals/PLAN.md. These are building blocks only; screens use them as they are built.
+
+   Food-group colours. The order is fixed everywhere: Protein, Veg, Carbs, Other. They pass the palette validator
+   (light and dark), but two pairs can look alike to some colour-blind people and two have low contrast on the page
+   background. So colour is NEVER the only signal: always pair it with a text label, a letter chip (P, V, C, O),
+   or a gap between segments. Re-run the validator before changing any of them. */
+:root { --g-protein: #e34948; --g-veg: #1baf7a; --g-carb: #eda100; --g-other: #2a78d6; }
+@media (prefers-color-scheme: dark) { :root { --g-protein: #e66767; --g-veg: #199e70; --g-carb: #c98500; --g-other: #3987e5; } }
+/* --sw is the swatch colour, --on the text colour that sits on it (dark on the yellow). */
+.g-protein { --sw: var(--g-protein); --on: #fff; }
+.g-veg { --sw: var(--g-veg); --on: #fff; }
+.g-carb { --sw: var(--g-carb); --on: #0b0b0b; }
+.g-other { --sw: var(--g-other); --on: #fff; }
+
+.ic { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.link-row { display: flex; padding: .7rem 0 0; }
+
+/* Small controls get a 44px touch area without changing how they look. */
+.cb, .when-chip, .recent > *, .chipset > *, .stepper b { position: relative; }
+.cb::after { content: ""; position: absolute; inset: -10px; }
+.when-chip::after { content: ""; position: absolute; inset: -9px 0; }
+.recent > *::after, .chipset > *::after { content: ""; position: absolute; inset: -6px 0; }
+.stepper b::after { content: ""; position: absolute; inset: -5px; }
+
+/* habit rows */
+.habit { display: flex; align-items: center; gap: .85rem; padding: .75rem 0; border-bottom: 1px solid var(--line); }
+.habit .name { flex: 1; min-width: 0; }
+.habit .name b { font-weight: 500; font-size: 1rem; display: block; }
+.habit .name small { color: var(--ink-3); font-size: .78rem; }
+.when-chip { display: inline-flex; align-items: center; gap: .3rem; height: 26px; padding: 0 .6rem; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); font: inherit; font-size: .78rem; font-weight: 550; margin-top: .2rem; cursor: pointer; }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.dots i.on { background: var(--accent); border-color: var(--accent); }
+.dots i.now { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink-3); }
+
+/* plates: a bar split by food group, with a legend. Segments are separated by a 2px gap. */
+.plate-bar { display: flex; gap: 2px; height: 10px; width: 100%; }
+.plate-bar i { display: block; border-radius: 3px; height: 100%; background: var(--sw); }
+.legend-row { display: flex; flex-wrap: wrap; gap: .25rem .9rem; font-size: .78rem; color: var(--ink-2); margin-top: .5rem; font-variant-numeric: tabular-nums; }
+.legend-row span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; background: var(--sw); }
+.day-plate { padding: .9rem 0 .4rem; border-bottom: 1px solid var(--line); }
+.day-plate .cap { display: flex; justify-content: space-between; font-size: .8rem; color: var(--ink-3); margin-bottom: .5rem; }
+.meal { display: grid; grid-template-columns: 5.2rem 1fr auto; gap: .75rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid var(--line); }
+.meal .lab { font-weight: 550; font-size: .95rem; }
+.meal .mid small { display: block; color: var(--ink-2); font-size: .84rem; margin-top: .3rem; }
+.meal .mid .skip { color: var(--ink-3); font-style: italic; }
+.btn.add { min-height: 34px; padding: 0 .75rem; font-size: .85rem; }
+
+/* sheets: headings with a sub-line, three-way choice, recent chips, portion tiles, rows with a control */
+.sheet h3 small { display: block; font: 400 .85rem var(--sans); color: var(--ink-3); margin-top: .15rem; }
+.big3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: .9rem; }
+.bigbtn { display: flex; flex-direction: column; align-items: center; gap: .35rem; padding: .95rem .25rem; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--field); font: inherit; font-weight: 550; font-size: .92rem; color: var(--ink-2); cursor: pointer; }
+.bigbtn .ic { width: 26px; height: 26px; }
+.bigbtn.on, .bigbtn[aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); outline: 2px solid var(--accent); outline-offset: -2px; }
+.bigbtn small { font-weight: 400; color: var(--ink-3); font-size: .72rem; }
+.recent { display: flex; gap: .4rem; overflow: hidden; margin-top: .6rem; }
+.recent > * { flex: none; height: 32px; display: inline-flex; align-items: center; padding: 0 .75rem; border: 1px solid var(--line-strong); border-radius: 999px; font: inherit; font-size: .84rem; color: var(--ink-2); background: var(--field); cursor: pointer; }
+.recent > .on, .recent > [aria-pressed=true] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; margin-top: .8rem; }
+.ptile { display: block; width: 100%; text-align: left; padding: .75rem .8rem .7rem; border-radius: 10px; border: 1.5px solid var(--line-strong); background: var(--field); font: inherit; color: inherit; cursor: pointer; }
+.ptile.on { border-color: var(--sw); background: color-mix(in srgb, var(--sw) 11%, var(--field)); }
+.ptile .top { display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: .98rem; }
+.ptile .top em { font-style: normal; font-size: .72rem; width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; background: var(--sw); color: var(--on, #fff); font-weight: 700; }
+.ptile .eg { display: block; color: var(--ink-3); font-size: .76rem; margin-top: .1rem; }
+.pips { display: flex; gap: 4px; margin: .6rem 0 .35rem; }
+.pips i { flex: 1; height: 8px; border-radius: 3px; background: var(--line); }
+.pips i.f { background: var(--sw); }
+.ptile small { color: var(--ink-2); font-size: .78rem; font-weight: 550; }
+.ptile:not(.on) small { color: var(--ink-3); font-weight: 400; }
+.live { margin-top: .9rem; padding: .8rem 0 .2rem; border-top: 1px solid var(--line); }
+.rowline { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-top: 1px solid var(--line); }
+.rowline b { font-weight: 550; display: block; } .rowline small { color: var(--ink-3); font-size: .8rem; }
+.switch { width: 44px; height: 26px; border-radius: 13px; background: var(--line-strong); position: relative; flex: none; border: 0; padding: 0; cursor: pointer; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--field); transition: transform .15s; }
+.switch[aria-checked=true] { background: var(--accent); }
+.switch[aria-checked=true]::after { transform: translateX(18px); background: var(--accent-ink); }
+.stepper { display: inline-flex; align-items: center; gap: .2rem; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--field); }
+.stepper span { min-width: 2.2rem; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stepper b { width: 34px; height: 34px; display: grid; place-items: center; color: var(--ink-2); font-weight: 400; font-size: 1.2rem; cursor: pointer; }
+.chipset { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+.chipset > * { height: 32px; display: inline-flex; align-items: center; padding: 0 .8rem; border: 1px solid var(--line-strong); border-radius: 999px; font: inherit; font-size: .86rem; color: var(--ink-2); background: var(--field); cursor: pointer; }
+.chipset > .on, .chipset > [aria-pressed=true] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* Review: habit picker, month calendar, time-of-day bars */
+.pick { display: flex; gap: .4rem; margin-top: 1rem; }
+.pick > * { height: 34px; display: inline-flex; align-items: center; padding: 0 .9rem; border-radius: 6px; border: 1px solid var(--line-strong); background: transparent; font: inherit; font-weight: 550; font-size: .86rem; color: var(--ink-2); cursor: pointer; }
+.pick > .on, .pick > [aria-pressed=true] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: .6rem; }
+.cal .h { text-align: center; font-size: .7rem; color: var(--ink-3); font-weight: 600; padding-bottom: 2px; }
+.cal .d { aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; font: inherit; font-size: .72rem; color: var(--ink-3); gap: 1px; background: var(--surface); padding: 0; }
+.cal button.d { cursor: pointer; }
+.cal .d.x { border-color: transparent; background: transparent; }
+.cal .d.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+.cal .d.on .ic { width: 15px; height: 15px; }
+.cal .d.today { outline: 2px solid var(--ink); outline-offset: 1px; }
+.cal .d.future { opacity: .45; border-style: dashed; }
+.hbar { display: grid; grid-template-columns: 6.5rem 1fr 2rem; align-items: center; gap: .7rem; padding: .5rem 0; font-size: .9rem; }
+.hbar .t { display: flex; align-items: center; gap: .45rem; color: var(--ink-2); }
+.hbar .tr { height: 10px; border-radius: 3px; background: var(--line); }
+.hbar .tr i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.hbar b { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* Review: one stacked bar per day (Protein at the bottom) and the day list */
+.wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; align-items: end; height: 150px; margin-top: 1rem; }
+.wk .col { display: flex; flex-direction: column; height: 100%; justify-content: flex-end; }
+.wk .stack { display: flex; flex-direction: column-reverse; gap: 2px; height: 120px; }
+.wk .stack i { display: block; border-radius: 3px; background: var(--sw); }
+.wk .none { height: 120px; border: 1.5px dashed var(--line-strong); border-radius: 6px; }
+.wk .dl { text-align: center; font-size: .72rem; color: var(--ink-3); margin-top: .4rem; font-weight: 500; }
+.wk .dl.now { color: var(--ink); font-weight: 700; }
+.drow { display: grid; grid-template-columns: 4.4rem 1fr; gap: .15rem .8rem; padding: .75rem 0; border-bottom: 1px solid var(--line); align-items: center; }
+.drow .d { font-weight: 560; font-size: .9rem; }
+.drow small { grid-column: 2; color: var(--ink-3); font-size: .8rem; }
+.foot { color: var(--ink-3); font-size: .8rem; margin-top: 1rem; }
+
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }
