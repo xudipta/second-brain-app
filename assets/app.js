@@ -497,27 +497,29 @@
     Tr.GROUPS.filter((g) => percent[g] > 0).map((g) => h('i', { class: GROUP_CLASS[g], style: `flex:${percent[g]}` })));
   const plateLegend = (percent) => h('div', { class: 'legend-row' }, Tr.GROUPS.filter((g) => percent[g] > 0).map((g) => h('span', { class: GROUP_CLASS[g] }, `${Tr.GROUP_LABEL[g]} ${percent[g]}%`)));
 
+  // One meal slot: an Add button, or the logged meal as a button to edit it. Used on Today and in the diet day view.
+  function mealRow(meals, date, slot, redraw) {
+    const m = Tr.findMeal(meals, date, slot), name = SLOT_LABEL[slot], lower = name.toLowerCase();
+    const open = () => mealSheet(slot, date, () => redraw(`meal-${slot}`, `meal-add-${slot}`));
+    if (!m) {
+      return h('div', { class: 'meal' }, h('span', { class: 'lab' }, name), h('div', { class: 'mid' }),
+        h('button', { class: 'btn secondary add', type: 'button', 'aria-label': `Add ${lower}`, 'data-focus-key': `meal-add-${slot}`, onclick: open }, ic('plus'), 'Add'));
+    }
+    const shares = m.skipped ? null : Tr.mealShares(m.levels);
+    const label = m.skipped ? `Edit ${lower}, skipped` : `Edit ${lower}: ${Tr.shareText(shares)}${m.note ? '. ' + m.note : ''}`;
+    return h('div', { class: 'meal' }, h('span', { class: 'lab' }, name),
+      h('button', { class: 'mid', type: 'button', 'aria-label': label, 'data-focus-key': `meal-${slot}`, onclick: open },
+        m.skipped ? h('small', { class: 'skip' }, 'Skipped') : [plateBar(shares), m.note ? h('small', null, m.note) : null]),
+      h('span'));
+  }
+
   // The Meals section on Today: today's plate so far, and the four fixed slots.
   function mealsSection(t0) {
     const meals = getMeals(), eaten = meals.filter((m) => m.date === t0 && !m.skipped).length, plate = Tr.dayPlate(meals, t0);
-    const row = (slot) => {
-      const m = Tr.findMeal(meals, t0, slot), name = SLOT_LABEL[slot], lower = name.toLowerCase();
-      const open = () => mealSheet(slot, t0, () => redrawToday(`meal-${slot}`, `meal-add-${slot}`));
-      if (!m) {
-        return h('div', { class: 'meal' }, h('span', { class: 'lab' }, name), h('div', { class: 'mid' }),
-          h('button', { class: 'btn secondary add', type: 'button', 'aria-label': `Add ${lower}`, 'data-focus-key': `meal-add-${slot}`, onclick: open }, ic('plus'), 'Add'));
-      }
-      const shares = m.skipped ? null : Tr.mealShares(m.levels);
-      const label = m.skipped ? `Edit ${lower}, skipped` : `Edit ${lower}: ${Tr.shareText(shares)}${m.note ? '. ' + m.note : ''}`;
-      return h('div', { class: 'meal' }, h('span', { class: 'lab' }, name),
-        h('button', { class: 'mid', type: 'button', 'aria-label': label, 'data-focus-key': `meal-${slot}`, onclick: open },
-          m.skipped ? h('small', { class: 'skip' }, 'Skipped') : [plateBar(shares), m.note ? h('small', null, m.note) : null]),
-        h('span'));
-    };
     return [
       h('div', { class: 'section' }, h('h2', null, 'Meals'), eaten ? h('span', { class: 'count-chip' }, `${eaten} logged`) : null),
       plate ? h('div', { class: 'day-plate' }, h('div', { class: 'cap' }, h('span', null, "Today's plate so far"), h('span', null, 'rough portions')), plateBar(plate.percent), plateLegend(plate.percent)) : null,
-      Tr.SLOTS.map(row)
+      Tr.SLOTS.map((slot) => mealRow(meals, t0, slot, redrawToday))
     ];
   }
 
@@ -648,6 +650,73 @@
         Tr.PARTS.map((k) => h('div', { class: 'hbar' }, h('span', { class: 't' }, ic(PART_ICON[k]), PART_LABEL[k]), h('span', { class: 'tr', 'aria-hidden': 'true' }, h('i', { style: `width:${counts.total ? Math.round(counts[k] / counts.total * 100) : 0}%` })), h('b', null, counts[k])))] : null);
   }
 
+  // ====================== REVIEW: DIET ======================
+  // The range of the average plate (7 or 30 days), the bar picked on the chart, and how many pages of recent days are shown.
+  let dietRange = 7, dietSel = null, dietMore = 1;
+  const dayChip = (d, t0) => (d === t0 ? 'Today' : `${new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(parseDate(d))} ${Number(d.slice(8))}`);
+  function redrawDiet(...focusKeys) { const y = window.scrollY; quiet = true; reviewDietPanel(); quiet = false; window.scrollTo(0, y); if (focusKeys.length) focusByKey(...focusKeys); }
+
+  function reviewDietPanel() {
+    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
+    const t0 = today(), meals = getMeals();
+    if (!meals.length) {
+      view(...reviewHead('diet'), h('div', { class: 'empty' }, svg('review'), h('h3', null, 'No meals yet'),
+        h('p', null, 'Add a meal on Today. Here you will see your average plate and how each day looked.'), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
+      return;
+    }
+    const week = Tk.days(Tk.addDays(t0, -6), t0).slice().reverse();                       // oldest first, ending today
+    const rangeDays = Tk.days(Tk.addDays(t0, -(dietRange - 1)), t0), avg = Tr.rangePlate(meals, rangeDays);
+
+    // one stacked bar per day: Protein at the bottom, then Veg, Carbs, Other
+    const cols = week.map((d) => {
+      const pl = Tr.dayPlate(meals, d), text = pl ? `${cellDay(d)}: ${Tr.shareText(pl.percent)}` : `${cellDay(d)}: no meals logged`;
+      return h('button', { type: 'button', class: 'col', title: text, 'aria-label': `${text}. Tap for details`, 'aria-pressed': String(dietSel === d), 'data-focus-key': `bar-${d}`,
+        onclick: () => { dietSel = dietSel === d ? null : d; redrawDiet(`bar-${d}`); } },
+      pl ? h('span', { class: 'stack' }, Tr.GROUPS.filter((g) => pl.percent[g] > 0).map((g) => h('i', { class: GROUP_CLASS[g], style: `height:calc(${pl.percent[g]}% - 2px)` }))) : h('span', { class: 'none' }),
+      h('span', { class: 'dl' + (d === t0 ? ' now' : '') }, new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(parseDate(d))));
+    });
+    const selPlate = dietSel ? Tr.dayPlate(meals, dietSel) : null;
+
+    // recent days that have any meal, newest first
+    const days = Tr.mealDays(meals, Tk.addDays(t0, -(dietRange - 1)), t0), shown = days.slice(0, 10 * dietMore);
+
+    view(
+      ...reviewHead('diet'),
+      h('div', { class: 'section' }, h('h2', null, 'Average plate'), h('span', { class: 'count-chip' }, avg ? `last ${dietRange} days · ${plural(avg.daysLogged, 'day')} logged` : `last ${dietRange} days`)),
+      h('div', { class: 'seg', role: 'group', 'aria-label': 'Range', style: 'margin:.7rem 0 0' }, [7, 30].map((n) => h('button', { type: 'button', 'aria-pressed': String(dietRange === n), onclick: () => { dietRange = n; dietMore = 1; redrawDiet(); } }, `${n} days`))),
+      avg ? h('div', { style: 'padding-top:.8rem' }, plateBar(avg.percent), plateLegend(avg.percent)) : h('p', { class: 'empty-line' }, `No meals logged in the last ${dietRange} days.`),
+      h('div', { class: 'section' }, h('h2', null, 'Each day'), h('span', { class: 'count-chip' }, 'last 7 days')),
+      h('div', { class: 'wk', role: 'group', 'aria-label': 'Share of each food group per day, last 7 days' }, cols),
+      h('div', { class: 'legend-row', style: 'margin-top:.9rem' }, Tr.GROUPS.map((g) => h('span', { class: GROUP_CLASS[g] }, Tr.GROUP_LABEL[g]))),
+      h('p', { class: 'sub', style: 'margin-top:.6rem', 'aria-live': 'polite' }, dietSel ? [`${cellDay(dietSel)}: ${selPlate ? Tr.shareText(selPlate.percent) : 'no meals logged'}. `, h('a', { href: `#/review/diet/${dietSel}` }, 'Open this day')] : 'Tap a bar for the exact values.'),
+      h('table', { class: 'sr-only' }, h('caption', null, 'Share of each food group per day, last 7 days'),
+        h('thead', null, h('tr', null, h('th', null, 'Day'), Tr.GROUPS.map((g) => h('th', null, Tr.GROUP_LABEL[g])))),
+        h('tbody', null, week.map((d) => { const pl = Tr.dayPlate(meals, d); return h('tr', null, h('td', null, cellDay(d)), pl ? Tr.GROUPS.map((g) => h('td', null, `${pl.percent[g]}%`)) : h('td', { colspan: 4 }, 'No meals logged')); }))),
+      h('div', { class: 'section' }, h('h2', null, 'Recent days'), h('span', { class: 'count-chip' }, days.length || '')),
+      days.length ? shown.map((d) => {
+        const pl = Tr.dayPlate(meals, d), notes = Tr.dayNotes(meals, d);
+        return h('a', { class: 'drow', href: `#/review/diet/${d}`, 'aria-label': `${cellDay(d)}: ${pl ? Tr.shareText(pl.percent) : 'only skipped meals'}${notes.length ? '. ' + notes.join(' · ') : ''}. Open this day` },
+          h('span', { class: 'd' }, dayChip(d, t0)), pl ? plateBar(pl.percent) : h('span', { class: 'skip', style: 'font-size:.84rem' }, 'Skipped'), notes.length ? h('small', null, notes.join(' · ')) : null);
+      }) : h('p', { class: 'empty-line' }, `No meals logged in the last ${dietRange} days.`),
+      days.length > shown.length ? h('button', { class: 'btn secondary block', type: 'button', style: 'margin-top:1rem', onclick: () => { dietMore++; redrawDiet(); } }, 'Show older days') : null,
+      h('p', { class: 'foot' }, 'Rough portions you chose for each plate, not nutrition facts.'));
+  }
+
+  // One day's meals, to add, edit, skip or delete (for any day up to today).
+  function redrawDietDay(date, ...focusKeys) { const y = window.scrollY; quiet = true; dietDayView(date); quiet = false; window.scrollTo(0, y); if (focusKeys.length) focusByKey(...focusKeys); }
+  function dietDayView(date) {
+    const t0 = today();
+    if (!Tr.validDate(date) || date > t0) { location.hash = '#/review/diet'; return; }
+    shell({ top: [backBtn('#/review/diet', 'Back to Diet'), h('div', { class: 'title' }, dayLabel(date))], tab: 'review' });
+    const meals = getMeals(), plate = Tr.dayPlate(meals, date), eaten = meals.filter((m) => m.date === date && !m.skipped).length;
+    view(
+      h('div', { class: 'eyebrow', style: 'margin-top:.5rem' }, weekday(date)), h('h1', { class: 'page-title' }, longDay(date)),
+      h('div', { class: 'section' }, h('h2', null, 'Meals'), eaten ? h('span', { class: 'count-chip' }, `${eaten} logged`) : null),
+      plate ? h('div', { class: 'day-plate' }, h('div', { class: 'cap' }, h('span', null, date === t0 ? "Today's plate so far" : "That day's plate"), h('span', null, 'rough portions')), plateBar(plate.percent), plateLegend(plate.percent)) : h('p', { class: 'empty-line' }, 'No meals logged this day yet.'),
+      Tr.SLOTS.map((slot) => mealRow(meals, date, slot, (...keys) => redrawDietDay(date, ...keys))),
+      h('p', { class: 'foot' }, 'Rough portions you chose for each plate, not nutrition facts.'));
+  }
+
   // --- close the day ---
   function closeView() {
     const t0 = today(), v = Tk.today(getTasks(), t0), left = v.carried.concat(v.planned);
@@ -685,12 +754,6 @@
       h('div', { class: 'seg', role: 'group', 'aria-label': 'Review sections' }, REVIEW_PANELS.map(([k, label]) =>
         h('button', { 'aria-pressed': String(k === panel), onclick: () => { if (k !== panel) location.hash = panelHref(k); } }, label)))
     ];
-  }
-  // Habits and Diet are built in the next steps; until then each panel says what it will show.
-  function reviewSoon(panel) {
-    shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
-    const [title, text] = ['Meal tracking is on its way', 'Soon you will log meals on Today, and see here your average plate and how each day looked.'];
-    view(...reviewHead(panel), h('div', { class: 'empty' }, svg('review'), h('h3', null, title), h('p', null, text), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
   }
   function barChart(per, t0) {
     const days = per.slice().reverse(); // oldest first
@@ -1140,7 +1203,7 @@
   // ====================== ROUTER ======================
   function route() {
     if (!V.unlocked) return boot();
-    const [, kind, arg] = location.hash.match(/^#\/(\w*)\/?([\w-]*)/) || [];
+    const [, kind, arg, arg2] = location.hash.match(/^#\/(\w*)\/?([\w-]*)\/?([\w-]*)/) || [];
     // leaving an unsaved edit by navigating elsewhere drops it
     if (session && session.editId && !(kind === 'edit' && arg === session.editId)) session = null;
     if (kind !== 'notes' && kind !== 'entries' && kind !== 'entry') { filters.q = ''; filters.type = 'all'; }
@@ -1150,7 +1213,7 @@
       case 'edit': return editView(arg);
       case 'entry': return entryView(arg);
       case 'notes': case 'entries': return notesView();
-      case 'review': return arg === 'habits' ? reviewHabitsPanel() : arg === 'diet' ? reviewSoon('diet') : arg ? dayDetailView(arg) : reviewTab();
+      case 'review': return arg === 'habits' ? reviewHabitsPanel() : arg === 'diet' ? (arg2 ? dietDayView(arg2) : reviewDietPanel()) : arg ? dayDetailView(arg) : reviewTab();
       case 'close': return closeView();
       case 'habits': return habitsView();
       case 'more': return moreView();

@@ -214,6 +214,12 @@
     return out;
   };
 
+  // ---- Review: the diet panel ----
+  // The notes of one day's meals in slot order, exactly as typed (empty ones are left out).
+  T.dayNotes = (meals, date) => SLOTS.map((slot) => T.findMeal(meals, date, slot)).filter((m) => m && m.note.trim()).map((m) => m.note);
+  // The days from `from` to `to` (inclusive) with at least one meal record, eaten or skipped, newest first.
+  T.mealDays = (meals, from, to) => [...new Set(meals.filter((m) => m.date >= from && m.date <= to).map((m) => m.date))].sort().reverse();
+
   // ---- Review: the habit calendar ----
   // A habit "starts" on its creation date, or on an earlier day that was logged (a day logged before it was created still counts).
   T.habitStart = (habit, logs) => [habit.createdDate].concat(logs.filter((l) => l.habitId === habit.id).map((l) => l.date)).sort()[0];

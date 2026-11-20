@@ -370,3 +370,16 @@ test('partCounts counts only days that have a time of day', () => {
   assert.deepEqual(T.partCounts(h, [...logs(h.id, [[2, 'evening'], [3, 'evening'], [4, 'morning'], [5]]), ...logs('other', [[6, 'morning']])]), { morning: 1, afternoon: 0, evening: 2, total: 3 });
   assert.deepEqual(T.partCounts(h, []), { morning: 0, afternoon: 0, evening: 0, total: 0 });
 });
+
+// ---------- Review: the diet panel ----------
+test('dayNotes: notes in slot order, exactly as typed, empty ones left out', () => {
+  const meals = [mk('2026-11-09', 'dinner', { veg: 1 }, { note: 'Soup' }), mk('2026-11-09', 'breakfast', { protein: 1 }, { note: '  Eggs   AND toast ' }), mk('2026-11-09', 'lunch', { carbs: 1 }), mk('2026-11-09', 'snack', {}, { skipped: true, note: 'Not hungry' }), mk('2026-11-08', 'lunch', { veg: 1 }, { note: 'Other day' })];
+  assert.deepEqual(T.dayNotes(meals, '2026-11-09'), ['  Eggs   AND toast ', 'Not hungry', 'Soup']);
+  assert.deepEqual(T.dayNotes(meals, '2026-11-01'), []);
+});
+test('mealDays: days with any meal record in the range, newest first, each once', () => {
+  const meals = [mk('2026-11-03', 'lunch', { veg: 1 }), mk('2026-11-03', 'dinner', { veg: 1 }), mk('2026-11-05', 'snack', {}, { skipped: true }), mk('2026-11-09', 'lunch', { veg: 1 }), mk('2026-10-20', 'lunch', { veg: 1 })];
+  assert.deepEqual(T.mealDays(meals, '2026-11-01', '2026-11-09'), ['2026-11-09', '2026-11-05', '2026-11-03']);
+  assert.deepEqual(T.mealDays(meals, '2026-11-04', '2026-11-08'), ['2026-11-05']);
+  assert.deepEqual(T.mealDays([], '2026-11-01', '2026-11-09'), []);
+});

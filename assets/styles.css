@@ -422,4 +422,13 @@ body.focus #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 .key { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-top: .6rem; font-size: .78rem; color: var(--ink-2); }
 .key span { display: inline-flex; align-items: center; gap: .35rem; }
 
+/* Review: Diet. Each bar of the chart is a button; the day rows are links. */
+.wk button.col { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.wk button.col .none, .wk button.col .dl { display: block; }
+.wk button.col[aria-pressed=true] .stack, .wk button.col[aria-pressed=true] .none { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 3px; }
+.wk button.col[aria-pressed=true] .dl { color: var(--ink); font-weight: 700; }
+a.drow { text-decoration: none; color: inherit; }
+a.drow:hover .d { color: var(--accent); }
+.drow .skip { color: var(--ink-3); font-style: italic; }
+
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }
