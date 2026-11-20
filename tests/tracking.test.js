@@ -383,3 +383,48 @@ test('mealDays: days with any meal record in the range, newest first, each once'
   assert.deepEqual(T.mealDays(meals, '2026-11-04', '2026-11-08'), ['2026-11-05']);
   assert.deepEqual(T.mealDays([], '2026-11-01', '2026-11-09'), []);
 });
+
+// ---------- export ----------
+const gym = () => { const g = T.makeHabit('Gym', { order: 0 }, '2026-11-01', 1); g.id = 'gym'; return g; };
+const readHab = () => { const r = T.makeHabit('Read 20 minutes', { trackTime: false, order: 1 }, '2026-11-01', 2); r.id = 'read'; return r; };
+const L = (habitId, date, part, note) => ({ habitId, date, part: part || null, note: note || '', at: 1 });
+
+test('habits file: exact format, time of day only for habits that track it', () => {
+  const md = T.habitsDayMarkdown([gym(), readHab()], [L('gym', '2026-11-09', 'evening', 'Optional note, exactly as typed.'), L('read', '2026-11-09', 'morning')], '2026-11-09');
+  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (evening)\n  Optional note, exactly as typed.\n- [x] Read 20 minutes\n');
+});
+test('habits file: no time of day, order by habit order, archived habits included, other days and habits left out', () => {
+  const g = gym(), r = readHab(); r.order = -1; g.archivedAt = 5;
+  const md = T.habitsDayMarkdown([g, r], [L('gym', '2026-11-09'), L('read', '2026-11-09'), L('read', '2026-11-08'), L('ghost', '2026-11-09')], '2026-11-09');
+  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Read 20 minutes\n- [x] Gym\n');
+  assert.equal(T.habitsDayMarkdown([g, r], [L('gym', '2026-11-08')], '2026-11-09'), '');
+  assert.equal(T.habitsDayMarkdown([], [], '2026-11-09'), '');
+});
+test('habits file: notes with colons, quotes, several lines and other languages are written as typed; blank notes are left out', () => {
+  const md = T.habitsDayMarkdown([gym(), readHab()], [L('gym', '2026-11-09', 'morning', 'Legs: "heavy"\n  second line, indented\nতৃতীয় লাইন'), L('read', '2026-11-09', null, '   ')], '2026-11-09');
+  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (morning)\n  Legs: "heavy"\n    second line, indented\n  তৃতীয় লাইন\n- [x] Read 20 minutes\n');
+});
+test('meals file: exact format, portions in words, groups at None left out, skipped, notes', () => {
+  const meals = [mk('2026-11-09', 'lunch', {}, { skipped: true }), mk('2026-11-09', 'breakfast', { protein: 3, carbs: 1 }, { note: 'Protein shake' })];
+  assert.equal(T.mealsDayMarkdown(meals, '2026-11-09'), '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nProtein: most, Carbs: some\nProtein shake\n\n## Lunch\nSkipped\n');
+});
+test('meals file: slot order, every portion word, fixed group order, a skipped meal keeps its note', () => {
+  const meals = [mk('2026-11-09', 'dinner', { other: 1, veg: 2, protein: 3 }), mk('2026-11-09', 'snack', {}, { skipped: true, note: 'Not hungry' }), mk('2026-11-09', 'breakfast', { carbs: 2 }), mk('2026-11-08', 'lunch', { veg: 1 })];
+  assert.equal(T.mealsDayMarkdown(meals, '2026-11-09'), '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nCarbs: half\n\n## Snack\nSkipped\nNot hungry\n\n## Dinner\nProtein: most, Veg: half, Other: some\n');
+  assert.equal(T.mealsDayMarkdown(meals, '2026-11-01'), '');
+});
+test('meals file: a note is written exactly as typed (spaces, case, colons, quotes, other languages)', () => {
+  const note = '  Dal: "tadka"   WITH  ভাত ';
+  assert.ok(T.mealsDayMarkdown([mk('2026-11-09', 'lunch', { protein: 1 }, { note })], '2026-11-09').includes('\n' + note + '\n'));
+});
+test('exportFiles: one file per day with data, oldest first, with the right paths and counts', () => {
+  const state = { habits: [gym()], habitLogs: [L('gym', '2026-12-02', 'evening'), L('gym', '2026-11-30', 'morning'), L('gym', '2026-12-02', 'evening')].slice(0, 2), meals: [mk('2026-11-30', 'lunch', { veg: 1 }), mk('2026-12-01', 'dinner', {}, { skipped: true })] };
+  const r = T.exportFiles(state);
+  assert.deepEqual(r.files.map((f) => f.name), ['habits/2026/11/2026-11-30.md', 'habits/2026/12/2026-12-02.md', 'meals/2026/11/2026-11-30.md', 'meals/2026/12/2026-12-01.md']);
+  assert.deepEqual([r.habitDays, r.mealDays], [2, 2]);
+});
+test('exportFiles: nothing when there are no check-ins or meals, and nothing for check-ins of an unknown habit', () => {
+  assert.deepEqual(T.exportFiles({ entries: [{}], tasks: [{}] }), { files: [], habitDays: 0, mealDays: 0 });
+  assert.deepEqual(T.exportFiles({ habits: [gym()], habitLogs: [], meals: [] }), { files: [], habitDays: 0, mealDays: 0 });
+  assert.deepEqual(T.exportFiles({ habits: [gym()], habitLogs: [L('ghost', '2026-11-09')], meals: [] }).files, []);
+});
