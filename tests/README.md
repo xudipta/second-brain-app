@@ -12,6 +12,7 @@ Useful options for the end-to-end runner: `--verbose` (print every passing check
 ## Layout
 
 - `tracking.test.js`, `tasks.test.js`: the pure logic in `assets/tracking.js` and `assets/tasks.js`.
+- `markdown.test.js`: with `npm install`, a real markdown parser checks that no note can change an exported file's structure (skipped without it).
 - `syntax.test.js`: every script compiles, and the service worker caches every script the page loads.
 - `e2e/*.e2e.js`: one flow per file, run against the real app served by `e2e/server.js`. The clock is fixed (`2026-11-09 10:00` in Asia/Kolkata), so results do not depend on the day the tests run.
 - `fixtures/`: real backups written by the release before habits and meals existed (plain, encrypted with the passphrase `fixture passphrase`, and the oldest bare-list format). They prove old data still restores.

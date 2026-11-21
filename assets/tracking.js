@@ -222,17 +222,21 @@
   // Only the user's own words plus fixed headings. Check-in and meal notes are written exactly as typed.
   const SLOT_NAME = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack', dinner: 'Dinner' };
   const PORTION_WORD = ['none', 'some', 'half', 'most'];
-  const indent = (text) => text.split('\n').map((l) => '  ' + l).join('\n');
+  // A note's lines are indented so that, whatever the owner typed (a "#", "---", "- [ ]", ">" ...), a markdown viewer shows it as
+  // part of the line above and it cannot become a heading, list or rule of its own. Only spaces are added; the text itself is
+  // not changed, and removing exactly this many spaces from the start of each line gives back what was typed.
+  const NOTE_INDENT = { habit: 6, meal: 4 };
+  const indent = (text, n) => text.split('\n').map((l) => ' '.repeat(n) + l).join('\n');
 
   // habits/YYYY/MM/YYYY-MM-DD.md: the habits done that day, in the habits' order (archived ones too). '' when there are none.
-  // The time of day is added in brackets only for a habit that tracks it. A multi-line note is indented under its habit.
+  // The time of day is added in brackets only for a habit that tracks it. A note is indented under its habit (see NOTE_INDENT).
   T.habitsDayMarkdown = (habits, logs, date) => {
     const lines = [];
     habits.slice().sort(byOrder).forEach((hb) => {
       const log = T.findLog(logs, hb.id, date);
       if (!log) return;
       lines.push(`- [x] ${hb.name}${hb.trackTime && log.part ? ` (${log.part})` : ''}`);
-      if (log.note.trim()) lines.push(indent(log.note));
+      if (log.note.trim()) lines.push(indent(log.note, NOTE_INDENT.habit));
     });
     return lines.length ? `---\ndate: ${date}\ntype: habits\n---\n\n## Done\n${lines.join('\n')}\n` : '';
   };
@@ -245,7 +249,7 @@
       if (!m) return;
       const lines = [`## ${SLOT_NAME[slot]}`];
       lines.push(m.skipped ? 'Skipped' : GROUPS.filter((g) => m.levels[g] > 0).map((g) => `${GROUP_LABEL[g]}: ${PORTION_WORD[m.levels[g]]}`).join(', '));
-      if (m.note.trim()) lines.push(m.note);
+      if (m.note.trim()) lines.push(indent(m.note, NOTE_INDENT.meal));
       blocks.push(lines.join('\n'));
     });
     return blocks.length ? `---\ndate: ${date}\ntype: meals\n---\n\n${blocks.join('\n\n')}\n` : '';

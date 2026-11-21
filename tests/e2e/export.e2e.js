@@ -53,12 +53,12 @@ module.exports = { name: 'Export: zip with notes, to-dos, habits and meals', asy
   ok((await p.textContent('#toast')) === 'Exported 1 note, 1 day of to-dos, 3 days of habits and 2 days of meals.', `toast: "${await p.textContent('#toast')}"`);
   // exact formats
   const h9 = read(zipC, 'habits/2026/11/2026-11-09.md');
-  ok(h9 === '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (evening)\n  Legs: "heavy"\n  second line\n  তৃতীয় লাইন\n- [x] Read 20 minutes\n', 'habits file: exact format, quotes and colons, several lines indented, Bengali kept, no bracket for a habit without time of day');
+  ok(h9 === '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (evening)\n      Legs: "heavy"\n      second line\n      তৃতীয় লাইন\n- [x] Read 20 minutes\n', 'habits file: exact format, quotes and colons, several lines indented by 6 spaces, Bengali kept, no bracket for a habit without time of day');
   ok(read(zipC, 'habits/2026/11/2026-11-07.md') === '---\ndate: 2026-11-07\ntype: habits\n---\n\n## Done\n- [x] Gym (morning)\n', 'a day with one habit and no note');
-  ok(read(zipC, 'habits/2026/10/2026-10-03.md') === '---\ndate: 2026-10-03\ntype: habits\n---\n\n## Done\n- [x] Cycling (afternoon)\n    spaces   kept  \n', 'an archived habit\'s check-in is exported, and its note keeps its spaces');
+  ok(read(zipC, 'habits/2026/10/2026-10-03.md') === '---\ndate: 2026-10-03\ntype: habits\n---\n\n## Done\n- [x] Cycling (afternoon)\n        spaces   kept  \n', 'an archived habit\'s check-in is exported, and its note keeps its spaces');
   const m9 = read(zipC, 'meals/2026/11/2026-11-09.md');
-  ok(m9 === '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nProtein: most, Carbs: some\nProtein shake\n\n## Lunch\nSkipped\n\n## Dinner\nProtein: most, Veg: half, Other: some\n  Dal: "tadka"   WITH  ভাত \n', 'meals file: exact format, slot order, portion words, groups at None left out, "Skipped", and the note exactly as typed');
-  ok(read(zipC, 'meals/2026/11/2026-11-08.md') === '---\ndate: 2026-11-08\ntype: meals\n---\n\n## Snack\nSkipped\nNot hungry\n', 'a skipped meal keeps its note');
+  ok(m9 === '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nProtein: most, Carbs: some\n    Protein shake\n\n## Lunch\nSkipped\n\n## Dinner\nProtein: most, Veg: half, Other: some\n      Dal: "tadka"   WITH  ভাত \n', 'meals file: exact format, slot order, portion words, groups at None left out, "Skipped", and the note exactly as typed, indented so markdown cannot turn it into structure');
+  ok(read(zipC, 'meals/2026/11/2026-11-08.md') === '---\ndate: 2026-11-08\ntype: meals\n---\n\n## Snack\nSkipped\n    Not hungry\n', 'a skipped meal keeps its note');
   ok(!names.some(n => n.includes('2026-11-01') || n.includes('2026-11-02')), 'no file for a day with nothing logged');
   // the existing files are byte-for-byte what the app wrote before
   ok(read(zipC, 'entries/2026/11/2026-11-09-idea-an-idea.md') === read(zipB, 'entries/2026/11/2026-11-09-idea-an-idea.md') && read(zipC, 'todos/2026/11/2026-11-09.md') === read(zipB, 'todos/2026/11/2026-11-09.md'), 'notes and to-do files are identical to the notes-only export');
