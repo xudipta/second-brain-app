@@ -27,7 +27,7 @@ An installable web app for the [second-brain](https://github.com/xudipta/second-
 - Skip any question; skipped questions are left out of the entry.
 - Entries are saved **only in this browser**, **encrypted** (see Security). A passphrase lock is optional. The site is public, your entries are not.
 - Export: download one entry as `.md`, copy or share it, or export everything as a `.zip` that keeps the `entries/YYYY/MM/` paths. Unzip into the second-brain repo and commit. Entries not yet exported are marked with a dot.
-- The zip also holds one markdown file per active day: `todos/YYYY/MM/YYYY-MM-DD.md`, `habits/YYYY/MM/YYYY-MM-DD.md` (the habits you did, with the time of day for habits that track it, archived habits included) and `meals/YYYY/MM/YYYY-MM-DD.md` (each slot's portions as words, or "Skipped", then your note). Notes are written exactly as typed. A day with nothing logged gets no file, and nothing is added when you have no habit or meal data. For example:
+- The zip also holds one markdown file per active day: `todos/YYYY/MM/YYYY-MM-DD.md`, `habits/YYYY/MM/YYYY-MM-DD.md` (the habits you did, with the time of day for habits that track it, archived habits included) and `meals/YYYY/MM/YYYY-MM-DD.md` (each slot's portions as words, or "Skipped", then your note). Notes are written exactly as typed, with only spaces added at the start of each line (4 in meals files, 6 in habits files) so a note that starts with `#`, `---`, `- [ ]` or `>` cannot become a heading, list or rule in a markdown viewer; remove those spaces to get your text back unchanged. A day with nothing logged gets no file, and nothing is added when you have no habit or meal data. For example:
 
   ```
   ---
@@ -37,7 +37,7 @@ An installable web app for the [second-brain](https://github.com/xudipta/second-
 
   ## Breakfast
   Protein: most, Carbs: some
-  Protein shake
+      Protein shake
 
   ## Lunch
   Skipped

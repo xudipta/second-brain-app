@@ -418,7 +418,7 @@ const L = (habitId, date, part, note) => ({ habitId, date, part: part || null, n
 
 test('habits file: exact format, time of day only for habits that track it', () => {
   const md = T.habitsDayMarkdown([gym(), readHab()], [L('gym', '2026-11-09', 'evening', 'Optional note, exactly as typed.'), L('read', '2026-11-09', 'morning')], '2026-11-09');
-  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (evening)\n  Optional note, exactly as typed.\n- [x] Read 20 minutes\n');
+  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (evening)\n      Optional note, exactly as typed.\n- [x] Read 20 minutes\n');
 });
 test('habits file: no time of day, order by habit order, archived habits included, other days and habits left out', () => {
   const g = gym(), r = readHab(); r.order = -1; g.archivedAt = 5;
@@ -429,20 +429,31 @@ test('habits file: no time of day, order by habit order, archived habits include
 });
 test('habits file: notes with colons, quotes, several lines and other languages are written as typed; blank notes are left out', () => {
   const md = T.habitsDayMarkdown([gym(), readHab()], [L('gym', '2026-11-09', 'morning', 'Legs: "heavy"\n  second line, indented\nতৃতীয় লাইন'), L('read', '2026-11-09', null, '   ')], '2026-11-09');
-  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (morning)\n  Legs: "heavy"\n    second line, indented\n  তৃতীয় লাইন\n- [x] Read 20 minutes\n');
+  assert.equal(md, '---\ndate: 2026-11-09\ntype: habits\n---\n\n## Done\n- [x] Gym (morning)\n      Legs: "heavy"\n        second line, indented\n      তৃতীয় লাইন\n- [x] Read 20 minutes\n');
 });
 test('meals file: exact format, portions in words, groups at None left out, skipped, notes', () => {
   const meals = [mk('2026-11-09', 'lunch', {}, { skipped: true }), mk('2026-11-09', 'breakfast', { protein: 3, carbs: 1 }, { note: 'Protein shake' })];
-  assert.equal(T.mealsDayMarkdown(meals, '2026-11-09'), '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nProtein: most, Carbs: some\nProtein shake\n\n## Lunch\nSkipped\n');
+  assert.equal(T.mealsDayMarkdown(meals, '2026-11-09'), '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nProtein: most, Carbs: some\n    Protein shake\n\n## Lunch\nSkipped\n');
 });
 test('meals file: slot order, every portion word, fixed group order, a skipped meal keeps its note', () => {
   const meals = [mk('2026-11-09', 'dinner', { other: 1, veg: 2, protein: 3 }), mk('2026-11-09', 'snack', {}, { skipped: true, note: 'Not hungry' }), mk('2026-11-09', 'breakfast', { carbs: 2 }), mk('2026-11-08', 'lunch', { veg: 1 })];
-  assert.equal(T.mealsDayMarkdown(meals, '2026-11-09'), '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nCarbs: half\n\n## Snack\nSkipped\nNot hungry\n\n## Dinner\nProtein: most, Veg: half, Other: some\n');
+  assert.equal(T.mealsDayMarkdown(meals, '2026-11-09'), '---\ndate: 2026-11-09\ntype: meals\n---\n\n## Breakfast\nCarbs: half\n\n## Snack\nSkipped\n    Not hungry\n\n## Dinner\nProtein: most, Veg: half, Other: some\n');
   assert.equal(T.mealsDayMarkdown(meals, '2026-11-01'), '');
 });
 test('meals file: a note is written exactly as typed (spaces, case, colons, quotes, other languages)', () => {
   const note = '  Dal: "tadka"   WITH  ভাত ';
-  assert.ok(T.mealsDayMarkdown([mk('2026-11-09', 'lunch', { protein: 1 }, { note })], '2026-11-09').includes('\n' + note + '\n'));
+  assert.ok(T.mealsDayMarkdown([mk('2026-11-09', 'lunch', { protein: 1 }, { note })], '2026-11-09').includes('\n' + '    ' + note + '\n'));
+});
+test('notes are indented so markdown cannot read them as structure, and removing the indent gives back the typed text exactly', () => {
+  const notes = ['# Big heading', '---', '- [ ] a task', '> quote', '1. one', '```', 'first\n\n# after a blank line', '  leading spaces\n\ttab', 'ভাত\n\n  '];
+  notes.forEach((note) => {
+    const m = T.mealsDayMarkdown([mk('2026-11-09', 'lunch', { veg: 1 }, { note })], '2026-11-09');
+    const body = m.split('\nVeg: some\n')[1].replace(/\n$/, '');
+    if (note.trim()) assert.equal(body.split('\n').map((l) => l.replace(/^ {4}/, '')).join('\n'), note);
+    assert.ok(!/^[#>`]|^-{3}|^- |^\d\. /m.test(m.split('\n---\n')[1].replace(/^## .*$/gm, '')), 'no line of the file body starts with a markdown marker: ' + JSON.stringify(m));
+    const h = T.habitsDayMarkdown([gym()], [L('gym', '2026-11-09', 'morning', note)], '2026-11-09');
+    if (note.trim()) assert.equal(h.split('(morning)\n')[1].replace(/\n$/, '').split('\n').map((l) => l.replace(/^ {6}/, '')).join('\n'), note);
+  });
 });
 test('exportFiles: one file per day with data, oldest first, with the right paths and counts', () => {
   const state = { habits: [gym()], habitLogs: [L('gym', '2026-12-02', 'evening'), L('gym', '2026-11-30', 'morning'), L('gym', '2026-12-02', 'evening')].slice(0, 2), meals: [mk('2026-11-30', 'lunch', { veg: 1 }), mk('2026-12-01', 'dinner', {}, { skipped: true })] };
