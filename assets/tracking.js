@@ -98,7 +98,11 @@
   T.updateHabit = (habit, patch) => {
     const p = patch || {}, name = 'name' in p ? String(p.name).trim().slice(0, 60) : habit.name;
     if (!name) return null;
+    // The start date may be moved, to any real day up to today (a habit you began before you installed the app). Check-ins
+    // from before the new date still count, because habitStart looks at them too.
+    if ('createdDate' in p && (!validDate(p.createdDate) || (p.today && p.createdDate > p.today))) return null;
     habit.name = name;
+    if ('createdDate' in p) habit.createdDate = p.createdDate;
     if ('trackTime' in p) habit.trackTime = p.trackTime !== false;
     if ('weeklyGoal' in p) habit.weeklyGoal = goalOf(p.weeklyGoal);
     return habit;
