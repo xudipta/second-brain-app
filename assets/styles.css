@@ -380,6 +380,9 @@ body.focus #toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 /* Review: one stacked bar per day (Protein at the bottom) and the day list */
 .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; align-items: end; height: 150px; margin-top: 1rem; }
 .wk .col { display: flex; flex-direction: column; height: 100%; justify-content: flex-end; }
+.wk.wide { display: flex; gap: 4px; overflow-x: auto; padding-bottom: .2rem; scrollbar-width: thin; }
+.wk.wide .col { flex: 0 0 26px; }
+.wk.wide .dl { font-size: .68rem; }
 .wk .stack { display: flex; flex-direction: column-reverse; gap: 2px; height: 120px; }
 .wk .stack i { display: block; border-radius: 3px; background: var(--sw); }
 .wk .none { height: 120px; border: 1.5px dashed var(--line-strong); border-radius: 6px; }
