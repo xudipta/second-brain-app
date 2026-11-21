@@ -259,6 +259,33 @@ test('updateHabit: rename, time tracking and goal; an empty name changes nothing
   T.updateHabit(h, { name: 'x'.repeat(90) }); assert.equal(h.name.length, 60);
   T.updateHabit(h, {}); assert.equal(h.name.length, 60);
 });
+test('updateHabit: the start date can move earlier, never into the future, and bad dates change nothing', () => {
+  const h = named('Gym', 0); h.createdDate = '2026-11-05';
+  assert.equal(T.updateHabit(h, { createdDate: '2026-10-01', today: '2026-11-09' }), h);
+  assert.equal(h.createdDate, '2026-10-01');
+  assert.equal(T.updateHabit(h, { name: 'Renamed', createdDate: '2026-11-10', today: '2026-11-09' }), null);
+  assert.deepEqual([h.name, h.createdDate], ['Gym', '2026-10-01'], 'a future date is refused and nothing else changes either');
+  assert.equal(T.updateHabit(h, { createdDate: '2026-02-30', today: '2026-11-09' }), null);
+  assert.equal(T.updateHabit(h, { createdDate: 'yesterday', today: '2026-11-09' }), null);
+  assert.equal(T.updateHabit(h, { createdDate: null, today: '2026-11-09' }), null);
+  assert.equal(h.createdDate, '2026-10-01');
+  assert.equal(T.updateHabit(h, { createdDate: '2026-11-09', today: '2026-11-09' }), h, 'today is allowed');
+  assert.equal(h.createdDate, '2026-11-09');
+});
+test('an earlier start date: stats count from it, the calendar opens those days, check-ins from before a later start still count', () => {
+  const h = habit({ createdDate: '2026-11-01' }), l = logs(h.id, [[2], [9]]);
+  assert.deepEqual(T.habitStats(h, l, '2026-11-09').month, { done: 2, elapsed: 9 });
+  T.updateHabit(h, { createdDate: '2026-10-20', today: '2026-11-09' });
+  assert.equal(T.habitStart(h, l), '2026-10-20');
+  const oct = T.monthCells({ y: 2026, m: 9 }, '2026-11-09', T.habitStart(h, l)).filter((c) => c.date);
+  assert.equal(oct.find((c) => c.date === '2026-10-19').kind, 'before');
+  assert.equal(oct.find((c) => c.date === '2026-10-20').kind, 'day');
+  // misses are counted from the new start: 20 Oct to 8 Nov is 20 days, one of them (2 Nov) logged
+  assert.equal(T.habitStats(h, l, '2026-11-09').backAfterMiss.total, 19);
+  // moving the start later than a day that is logged: the earlier check-in still counts
+  T.updateHabit(h, { createdDate: '2026-11-08', today: '2026-11-09' });
+  assert.equal(T.habitStart(h, l), '2026-11-02');
+});
 test('reorderHabit: moves among active habits, renumbers, stops at the ends', () => {
   const a = named('A', 0), b = named('B', 1), c = named('C', 2), x = named('X', 1, { archivedAt: 9 });
   const all = [a, b, c, x];

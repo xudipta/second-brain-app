@@ -430,10 +430,15 @@
       const less = h('button', { type: 'button', 'aria-label': 'Fewer days a week', onclick: () => { goal = goal === null ? null : goal === 1 ? null : goal - 1; showGoal(); } }, '–');
       const more = h('button', { type: 'button', 'aria-label': 'More days a week', onclick: () => { goal = goal === null ? 3 : Math.min(7, goal + 1); showGoal(); } }, '+');
       showGoal();
+      const startIn = editing ? h('input', { type: 'date', value: habit.createdDate, max: today(), 'aria-describedby': 'habit-start-hint' }) : null;
       const submit = () => {
         const name = nameIn.value.trim();
         if (!name) { err.textContent = 'Give the habit a name.'; nameIn.focus(); return; }
-        if (editing) Tr.updateHabit(habit, { name, trackTime, weeklyGoal: goal });
+        if (editing) {
+          const patch = { name, trackTime, weeklyGoal: goal };
+          if (startIn.value && startIn.value !== habit.createdDate) patch.createdDate = startIn.value, patch.today = today();
+          if (!Tr.updateHabit(habit, patch)) { err.textContent = 'Pick a start date that is not in the future.'; startIn.focus(); return; }
+        }
         else getHabits().push(Tr.makeHabit(name, { trackTime, weeklyGoal: goal, order: Tr.nextOrder(getHabits()) }, today(), Date.now()));
         saveTracking(); close(); after && after();
       };
@@ -441,6 +446,7 @@
         h('h3', null, editing ? 'Edit habit' : 'New habit'),
         h('label', { class: 'field', style: 'margin-top:.2rem' }, 'What do you want to track?', nameIn), err, warn,
         editing ? null : h('div', { class: 'chipset', role: 'group', 'aria-label': 'Suggestions' }, chips),
+        editing ? h('label', { class: 'field', style: 'margin-top:.9rem' }, 'Started on', startIn, h('small', { id: 'habit-start-hint' }, 'Move it earlier if you began before today. Days from then can be logged in Review.')) : null,
         h('div', { class: 'rowline', style: 'margin-top:.9rem' }, h('div', null, h('b', null, 'Track time of day'), h('small', null, 'Morning, afternoon or evening when you log it')), sw),
         h('div', { class: 'rowline' }, h('div', null, h('b', null, 'Weekly goal'), h('small', null, 'Optional. Shown in Review, never as a streak')), h('div', { class: 'stepper' }, less, goalVal, more)),
         h('div', { class: 'btn-row', style: 'margin-top:1rem' }, h('button', { class: 'btn', type: 'submit', style: 'flex:1' }, editing ? 'Save' : 'Add habit'), h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'Cancel'),
@@ -646,6 +652,7 @@
       h('table', { class: 'sr-only' }, h('caption', null, logged.length ? `${hb.name}: days done in ${monthTitle(ym)}` : `${hb.name}: no days logged in ${monthTitle(ym)}`),
         logged.length ? [h('thead', null, h('tr', null, h('th', null, 'Day'), h('th', null, 'Time of day'), h('th', null, 'Note'))),
           h('tbody', null, logged.map((c) => { const l = logOn(c.date); return h('tr', null, h('td', null, cellDay(c.date)), h('td', null, l.part && hb.trackTime ? PART_LABEL[l.part] : ''), h('td', null, l.note)); }))] : null),
+      h('p', { class: 'sub', style: 'margin-top:.7rem' }, 'Counting from ' + cellDay(start) + '. ', h('button', { type: 'button', class: 'btn ghost sm', 'data-focus-key': 'habit-start', onclick: () => habitEditorSheet(hb, () => redrawReviewHabits('habit-start')) }, 'Started earlier? Change the start date')),
       hb.trackTime ? [h('div', { class: 'section' }, h('h2', null, 'Time of day'), h('span', { class: 'count-chip' }, counts.total ? `${plural(counts.total, 'day')} with a time` : '')),
         Tr.PARTS.map((k) => h('div', { class: 'hbar' }, h('span', { class: 't' }, ic(PART_ICON[k]), PART_LABEL[k]), h('span', { class: 'tr', 'aria-hidden': 'true' }, h('i', { style: `width:${counts.total ? Math.round(counts[k] / counts.total * 100) : 0}%` })), h('b', null, counts[k])))] : null,
       h('p', { class: 'foot' }, 'Plain counts of what you logged. ', h('a', { href: '#/about/tracker' }, 'Where these numbers come from')));

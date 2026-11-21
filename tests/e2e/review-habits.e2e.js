@@ -78,6 +78,22 @@ module.exports = { name: 'Review, Habits: stats, calendar, past days, month navi
   // a non-leap February
   await seed(() => { const s = Vault.state; s.habits[0].createdDate = '2026-12-02'; Vault.touch(0); }); await load('2027-03-05T10:00:00', '#/review/habits'); await p.click('button[aria-label^="Previous month"]'); ok(await p.locator('.section h2:has-text("February 2027")').count() === 1 && await p.locator('.cal > *:not(.h):not(.x)').count() === 28 && await p.locator('.cal .d.x').count() === 0, 'February 2027 has 28 days and starts on a Monday');
 
+  // ===== a habit begun before it was added: move the start date earlier, then log an earlier day =====
+  await load('2026-11-09T10:00:00', '#/review/habits');
+  ok(await p.locator('.cal .d.x').count() > 0 && await p.locator('button:has-text("Started earlier")').count() === 1, 'the calendar says where it starts and offers to change the start date');
+  ok(await p.locator('.cal button.d[aria-label^="Fri, Oct 30"]').count() === 0, 'a day before the start is not tappable');
+  await p.click('button:has-text("Started earlier")'); await p.waitForSelector('.modal input[type=date]');
+  ok(await p.locator('.modal input[type=date]').getAttribute('max') === '2026-11-09', 'the date field cannot go past today');
+  ok(await p.locator('.modal input[type=date]').getAttribute('aria-describedby') === 'habit-start-hint', 'the date field has its hint attached');
+  await p.fill('.modal input[type=date]', '2026-10-20'); await p.click('.modal button[type=submit]'); await p.waitForTimeout(400);
+  ok(await seed(() => Vault.state.habits[0].createdDate) === '2026-10-20', 'the start date is saved');
+  ok(await p.locator('button[aria-label="Previous month, October 2026"]').count() === 1 && !(await p.locator('button[aria-label="Previous month, October 2026"]').isDisabled()), 'the earlier month can now be opened');
+  await p.click('button[aria-label="Previous month, October 2026"]'); await p.waitForTimeout(300);
+  const d25 = p.locator('.cal button.d[aria-label^="Sun, Oct 25"]'); ok(await d25.count() === 1, 'a day after the new start is tappable');
+  await d25.click(); await p.waitForSelector('.modal'); await p.click('.modal button[type=submit]'); await p.waitForTimeout(400);
+  ok(await seed(() => Vault.state.habitLogs.some((l) => l.habitId === 'gym' && l.date === '2026-10-25')), 'an earlier day can be logged');
+  ok((await stats())[0].includes('of 9 | Days this month'), 'this month still counts from the 1st');
+
   // ===== dark and storage =====
   ok(!(await p.evaluate(() => JSON.stringify(localStorage))).includes('Legs'), 'notes stay encrypted');
   await ctx.setOffline(true); await p.reload(); await p.waitForSelector('.cal'); ok(true, 'the panel works offline'); await ctx.setOffline(false);
