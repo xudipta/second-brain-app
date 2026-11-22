@@ -660,9 +660,9 @@
 
   // ====================== REVIEW: DIET ======================
   // The range of the average plate (7 or 30 days), the bar picked on the chart, and how many pages of recent days are shown.
-  let dietRange = 7, dietSel = null, dietMore = 1;
+  let dietRange = 7, dietSel = null, dietMore = 1, dietScroll = null; // dietScroll: where the 30 day chart was scrolled to (null = the end, today)
   const dayChip = (d, t0) => (d === t0 ? 'Today' : `${new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(parseDate(d))} ${Number(d.slice(8))}`);
-  function redrawDiet(...focusKeys) { const y = window.scrollY; quiet = true; reviewDietPanel(); quiet = false; window.scrollTo(0, y); if (focusKeys.length) focusByKey(...focusKeys); }
+  function redrawDiet(...focusKeys) { const y = window.scrollY, wide = document.querySelector('.wk.wide'); if (wide) dietScroll = wide.scrollLeft; quiet = true; reviewDietPanel(); quiet = false; window.scrollTo(0, y); if (focusKeys.length) focusByKey(...focusKeys); }
 
   function reviewDietPanel() {
     shell({ top: [h('span', { class: 'wordmark' }, h('i', null, svg('check')), 'Second Brain')], tab: 'review' });
@@ -672,7 +672,8 @@
         h('p', null, 'Add a meal on Today. Here you will see your average plate and how each day looked.'), h('a', { class: 'btn', style: 'margin-top:1rem', href: '#/' }, 'Go to Today')));
       return;
     }
-    const week = Tk.days(Tk.addDays(t0, -6), t0).slice().reverse();                       // oldest first, ending today
+    const week = Tk.days(Tk.addDays(t0, -(dietRange - 1)), t0).slice().reverse();         // the chart's days: the same period as the average, oldest first, ending today
+    const wide = dietRange > 7;                                                           // 30 days: narrow bars in a row that scrolls sideways
     const rangeDays = Tk.days(Tk.addDays(t0, -(dietRange - 1)), t0), avg = Tr.rangePlate(meals, rangeDays);
 
     // one stacked bar per day: Protein at the bottom, then Veg, Carbs, Other
@@ -681,7 +682,7 @@
       return h('button', { type: 'button', class: 'col', title: text, 'aria-label': `${text}. Tap for details`, 'aria-pressed': String(dietSel === d), 'data-focus-key': `bar-${d}`,
         onclick: () => { dietSel = dietSel === d ? null : d; redrawDiet(`bar-${d}`); } },
       pl ? h('span', { class: 'stack' }, Tr.GROUPS.filter((g) => pl.percent[g] > 0).map((g) => h('i', { class: GROUP_CLASS[g], style: `height:calc(${pl.percent[g]}% - 2px)` }))) : h('span', { class: 'none' }),
-      h('span', { class: 'dl' + (d === t0 ? ' now' : '') }, new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(parseDate(d))));
+      h('span', { class: 'dl' + (d === t0 ? ' now' : '') }, wide ? String(Number(d.slice(8))) : new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(parseDate(d))));
     });
     const selPlate = dietSel ? Tr.dayPlate(meals, dietSel) : null;
 
@@ -691,13 +692,13 @@
     view(
       ...reviewHead('diet'),
       h('div', { class: 'section' }, h('h2', null, 'Average plate'), h('span', { class: 'count-chip' }, avg ? `last ${dietRange} days · ${plural(avg.daysLogged, 'day')} logged` : `last ${dietRange} days`)),
-      h('div', { class: 'seg', role: 'group', 'aria-label': 'Range', style: 'margin:.7rem 0 0' }, [7, 30].map((n) => h('button', { type: 'button', 'aria-pressed': String(dietRange === n), onclick: () => { dietRange = n; dietMore = 1; redrawDiet(); } }, `${n} days`))),
+      h('div', { class: 'seg', role: 'group', 'aria-label': 'Range', style: 'margin:.7rem 0 0' }, [7, 30].map((n) => h('button', { type: 'button', 'aria-pressed': String(dietRange === n), onclick: () => { dietRange = n; dietMore = 1; dietSel = null; dietScroll = null; redrawDiet(); } }, `${n} days`))),
       avg ? h('div', { style: 'padding-top:.8rem' }, plateBar(avg.percent), plateLegend(avg.percent)) : h('p', { class: 'empty-line' }, `No meals logged in the last ${dietRange} days.`),
-      h('div', { class: 'section' }, h('h2', null, 'Each day'), h('span', { class: 'count-chip' }, 'last 7 days')),
-      h('div', { class: 'wk', role: 'group', 'aria-label': 'Share of each food group per day, last 7 days' }, cols),
+      h('div', { class: 'section' }, h('h2', null, 'Each day'), h('span', { class: 'count-chip' }, `last ${dietRange} days`)),
+      h('div', { class: 'wk' + (wide ? ' wide' : ''), role: 'group', 'aria-label': `Share of each food group per day, last ${dietRange} days` }, cols),
       h('div', { class: 'legend-row', style: 'margin-top:.9rem' }, Tr.GROUPS.map((g) => h('span', { class: GROUP_CLASS[g] }, Tr.GROUP_LABEL[g]))),
-      h('p', { class: 'sub', style: 'margin-top:.6rem', 'aria-live': 'polite' }, dietSel ? [`${cellDay(dietSel)}: ${selPlate ? Tr.shareText(selPlate.percent) : 'no meals logged'}. `, h('a', { href: `#/review/diet/${dietSel}` }, 'Open this day')] : 'Tap a bar for the exact values.'),
-      h('table', { class: 'sr-only' }, h('caption', null, 'Share of each food group per day, last 7 days'),
+      h('p', { class: 'sub', style: 'margin-top:.6rem', 'aria-live': 'polite' }, dietSel ? [`${cellDay(dietSel)}: ${selPlate ? Tr.shareText(selPlate.percent) : 'no meals logged'}. `, h('a', { href: `#/review/diet/${dietSel}` }, 'Open this day')] : (wide ? 'Tap a bar for the exact values. Scroll sideways for earlier days.' : 'Tap a bar for the exact values.')),
+      h('table', { class: 'sr-only' }, h('caption', null, `Share of each food group per day, last ${dietRange} days`),
         h('thead', null, h('tr', null, h('th', null, 'Day'), Tr.GROUPS.map((g) => h('th', null, Tr.GROUP_LABEL[g])))),
         h('tbody', null, week.map((d) => { const pl = Tr.dayPlate(meals, d); return h('tr', null, h('td', null, cellDay(d)), pl ? Tr.GROUPS.map((g) => h('td', null, `${pl.percent[g]}%`)) : h('td', { colspan: 4 }, 'No meals logged')); }))),
       h('div', { class: 'section' }, h('h2', null, 'Recent days'), h('span', { class: 'count-chip' }, days.length || '')),
@@ -708,6 +709,7 @@
       }) : h('p', { class: 'empty-line' }, `No meals logged in the last ${dietRange} days.`),
       days.length > shown.length ? h('button', { class: 'btn secondary block', type: 'button', style: 'margin-top:1rem', onclick: () => { dietMore++; redrawDiet(); } }, 'Show older days') : null,
       h('p', { class: 'foot' }, 'Rough portions you chose for each plate, not nutrition facts. ', h('a', { href: '#/about/tracker' }, 'Where these numbers come from')));
+    const strip = document.querySelector('.wk.wide'); if (strip) strip.scrollLeft = dietScroll === null ? strip.scrollWidth : dietScroll;
   }
 
   // One day's meals, to add, edit, skip or delete (for any day up to today).

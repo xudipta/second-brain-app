@@ -67,7 +67,18 @@ module.exports = { name: 'Review, Diet: average plate, chart, recent days, day v
   await p.click('.seg button:has-text("30 days")'); ok((await p.locator('.section:has-text("Average plate") .count-chip').innerText()) === `last 30 days · ${exp.n30} days logged` && (await p.locator('.plate-bar').first().getAttribute('aria-label')) === exp.r30, `30 days: ${exp.n30} days logged, average equals the rules (${exp.r30})`);
   ok(exp.n30 === exp.n7 + 2 && await p.locator('a.drow').count() === 9, 'days with no meals are not counted as zeros (only the 2 older days with meals are added)');
   ok(await p.locator('a.drow:has-text("Mon 2") .skip').innerText() === 'Skipped', 'a day with only skipped meals says "Skipped" (and is not in the average)');
+  // the chart follows the range
+  ok(await p.locator('.wk.wide .col').count() === 30 && (await p.locator('.section:has-text("Each day") .count-chip').innerText()) === 'last 30 days', '30 days: the chart has 30 bars and says "last 30 days"');
+  ok(await p.locator('table.sr-only tbody tr').count() === 30 && /last 30 days/.test(await p.locator('.wk').getAttribute('aria-label')), '30 days: the text alternative has 30 rows and the group is named for the period');
+  ok(await p.evaluate(() => { const w = document.querySelector('.wk.wide'); return w.scrollWidth > w.clientWidth && w.scrollLeft + w.clientWidth >= w.scrollWidth - 2; }), '30 days: the row scrolls sideways and opens on today');
+  ok((await p.locator('.wk.wide .col').last().getAttribute('aria-label')).startsWith('Mon, Nov 9') && (await p.locator('.wk.wide .col .dl.now').innerText()) === '9', 'the last bar is today');
+  ok(await p.evaluate(() => [...document.querySelectorAll('.wk.wide .col')].every((c) => c.getBoundingClientRect().width >= 24)), 'each bar is at least 24 px wide');
+  await p.evaluate(() => { document.querySelector('.wk.wide').scrollLeft = 0; });
+  await p.locator('.wk.wide .col').nth(1).click({ force: true }); await p.waitForTimeout(300);
+  ok(await p.locator('.wk.wide .col[aria-pressed=true]').count() === 1 && await p.evaluate(() => document.querySelector('.wk.wide').scrollLeft) < 30, 'picking an older bar keeps the row where it was scrolled');
+  ok(/exact values|Open this day|no meals/.test(await p.locator('p.sub[aria-live]').innerText()), 'the picked bar shows its values');
   await p.click('.seg button:has-text("7 days")');
+  ok(await p.locator('.wk.wide').count() === 0 && await p.locator('.wk .col').count() === 7 && (await p.locator('.section:has-text("Each day") .count-chip').innerText()) === 'last 7 days' && await p.locator('.wk .col[aria-pressed=true]').count() === 0, 'back to 7 days: seven bars, labelled, nothing picked');
   ok(!/should|recommend|target|healthy|too much|too little|goal/i.test(await p.locator('#app').innerText()), 'no advice, targets or judgement on the panel');
   ok((await p.locator('.foot').innerText()).startsWith('Rough portions you chose for each plate, not nutrition facts.') && await p.locator('.foot a[href="#/about/tracker"]').count() === 1, 'the footnote is shown, with the link to the sources');
   // ===== the day view =====
