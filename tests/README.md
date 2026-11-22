@@ -5,7 +5,7 @@
 | Unit tests (logic, rules, file formats, code checks) | `node tests/run.js` | Node 20 or later, nothing else |
 | End-to-end (real browser, fixed clock) | `node tests/e2e/run.js` | `npm install` then `npx playwright install chromium` |
 
-Run both before opening a pull request. GitHub Actions (`.github/workflows/tests.yml`) runs the unit tests on every pull request and on pushes to `main`; a failing test fails the check. The end-to-end suite is run locally.
+GitHub Actions (`.github/workflows/tests.yml`) runs both on every pull request and on pushes to `main`, as two jobs, and a failing test fails the check. Run them locally before opening a pull request to find problems sooner.
 
 Useful options for the end-to-end runner: `--verbose` (print every passing check) and `--grep=meals` (only files whose name contains the text).
 
