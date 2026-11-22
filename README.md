@@ -62,10 +62,12 @@ Edit `assets/templates.js`, but only after the change is sourced in `second-brai
 Unit tests need nothing installed beyond Node 20 or later. End-to-end tests drive a real browser with a fixed clock:
 
 ```sh
-node tests/run.js                                   # unit tests (also run by GitHub Actions on every pull request)
+node tests/run.js                                   # unit tests
 npm install && npx playwright install chromium      # once, for the end-to-end tests
 node tests/e2e/run.js                               # end-to-end: every flow, old-backup compatibility, accessibility
 ```
+
+GitHub Actions runs both on every pull request and on pushes to `main` (`.github/workflows/tests.yml`: a unit job and an end-to-end job), and a failing test fails the check.
 
 What each test covers, and which rule of the habits and meals plan it checks, is in [`tests/README.md`](tests/README.md).
 

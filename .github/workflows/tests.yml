@@ -9,13 +9,38 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit:
+    name: Unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Node only: nothing to install. A failing test fails this job.
+          cache: npm
+      # The unit tests need only Node. Installing the dev dependencies as well lets the markdown-structure test run
+      # instead of being skipped. A failing test fails this job.
+      - run: npm ci --ignore-scripts
       - run: node tests/run.js
+
+  e2e:
+    name: End-to-end tests (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The tests fix the clock and the time zone, so they do not depend on the day they run. A failing check fails this job
+      # and the runner prints each failing message.
+      - run: node tests/e2e/run.js
